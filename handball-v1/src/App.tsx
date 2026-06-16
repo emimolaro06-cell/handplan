@@ -12,19 +12,18 @@ import { MenuPage }           from '@/pages/MenuPage'
 import { TrainingEditorPage } from '@/pages/TrainingEditorPage'
 import { LibraryPage }        from '@/pages/LibraryPage'
 import { ExercisesPage }      from '@/pages/ExercisesPage'
+import { MonthlyPlanPage }    from '@/pages/MonthlyPlanPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-dj-900">
-        <div className="flex flex-col items-center gap-3">
-          <Spinner size={36}/>
-          <p className="text-white/50 text-sm">Cargando...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-dj-900">
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={36}/>
+        <p className="text-white/50 text-sm">Cargando...</p>
       </div>
-    )
-  }
+    </div>
+  )
   if (!profile) return <Navigate to="/" replace/>
   return <>{children}</>
 }
@@ -39,31 +38,24 @@ function CategoryGuard({ children }: { children: React.ReactNode }) {
 }
 
 function WithLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <CategoryGuard>
-      <AppLayout>{children}</AppLayout>
-    </CategoryGuard>
-  )
+  return <CategoryGuard><AppLayout>{children}</AppLayout></CategoryGuard>
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Acceso */}
         <Route path="/"          element={<ClubCodePage/>}/>
         <Route path="/registro"  element={<RegisterPage/>}/>
         <Route path="/perfiles"  element={<ProfilesPage/>}/>
-
-        {/* Requiere auth */}
         <Route path="/categoria" element={<AuthGuard><CategoryPage/></AuthGuard>}/>
         <Route path="/menu"      element={<CategoryGuard><MenuPage/></CategoryGuard>}/>
 
-        {/* App con sidebar */}
-        <Route path="/crear"            element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
+        <Route path="/crear"             element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/entrenamiento/:id" element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
-        <Route path="/biblioteca"       element={<WithLayout><LibraryPage/></WithLayout>}/>
-        <Route path="/ejercicios"       element={<WithLayout><ExercisesPage/></WithLayout>}/>
+        <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
+        <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
+        <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
 
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
