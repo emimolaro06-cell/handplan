@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <circle cx="40" cy="40" r="38" fill="#1e8a1e" stroke="#fbbf24" stroke-width="3"/>
+  <text x="40" y="30" text-anchor="middle" fill="#fbbf24" font-size="9" font-weight="bold" font-family="sans-serif">DEFENSA Y</text>
+  <text x="40" y="41" text-anchor="middle" fill="#fbbf24" font-size="9" font-weight="bold" font-family="sans-serif">JUSTICIA</text>
+  <text x="40" y="55" text-anchor="middle" fill="white" font-size="7" font-family="sans-serif">HANDBALL</text>
+</svg>
