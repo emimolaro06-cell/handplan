@@ -1,3 +1,8 @@
+bash
+
+cat /home/claude/handball-v1/src/lib/pdf.tsx
+Salida
+
 import {
   Document, Page, View, Text, Image, StyleSheet, pdf,
 } from '@react-pdf/renderer'
@@ -23,20 +28,23 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottom: `4px solid ${YELLOW}`,
+    minHeight: 80,
   },
   headerLeft: {
     flex: 1.4,
     padding: 10,
     borderRight: `2px solid ${YELLOW}`,
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 2,
     padding: 10,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 4,
   },
   headerRight: {
     width: 90,
-    padding: 6,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: YELLOW,
@@ -58,47 +66,47 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginTop: 8,
+    marginTop: 6,
   },
   tag: {
     backgroundColor: YELLOW,
     color: DARK,
-    fontSize: 8,
+    fontSize: 7,
     fontFamily: 'Helvetica-Bold',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
   },
   dateRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 3,
   },
   dateLabel: {
     color: YELLOW,
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'Helvetica-Bold',
   },
   dateValue: {
     color: WHITE,
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'Helvetica-Bold',
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
+    marginTop: 3,
   },
   contentLabel: {
     color: YELLOW,
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Helvetica-Bold',
   },
   contentBox: {
     backgroundColor: WHITE,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 3,
     flex: 1,
   },
@@ -107,39 +115,23 @@ const s = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'Helvetica-Bold',
   },
-  objectiveRow: {
-    marginTop: 6,
-  },
   objectiveText: {
     color: WHITE,
     fontSize: 8,
+    marginTop: 3,
   },
   logoReal: {
-    width: 78,
-    height: 78,
-  },
-  logoPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: YELLOW,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: GREEN,
-    fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
-    textAlign: 'center',
+    width: 82,
+    height: 82,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 8,
-    gap: 8,
+    padding: 6,
+    gap: 6,
   },
   momentBox: {
-    width: '48.5%',
+    width: '48.8%',
     backgroundColor: LIGHT,
     borderRadius: 4,
     overflow: 'hidden',
@@ -150,63 +142,67 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 4,
     gap: 6,
   },
   momentHeaderText: {
     color: WHITE,
-    fontSize: 8,
+    fontSize: 7.5,
     fontFamily: 'Helvetica-Bold',
     flex: 1,
   },
   momentHeaderBadge: {
     backgroundColor: YELLOW,
     color: DARK,
-    fontSize: 7,
+    fontSize: 6.5,
     fontFamily: 'Helvetica-Bold',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 3,
   },
   momentBody: {
     flexDirection: 'row',
-    minHeight: 110,
+    minHeight: 100,
+    maxHeight: 130,
   },
   momentImage: {
-    width: '55%',
+    width: 130,
+    height: 120,
+    objectFit: 'contain',
     backgroundColor: '#1a4a1a',
   },
   momentImagePlaceholder: {
-    width: '55%',
+    width: 130,
+    height: 120,
     backgroundColor: '#1a4a1a',
     alignItems: 'center',
     justifyContent: 'center',
   },
   momentImagePlaceholderText: {
     color: '#4a8a4a',
-    fontSize: 8,
+    fontSize: 7,
     textAlign: 'center',
   },
   momentContent: {
     flex: 1,
-    padding: 6,
+    padding: 5,
   },
   momentLabel: {
     color: '#1a6b1a',
     fontSize: 7,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   momentDesc: {
     color: DARK,
-    fontSize: 8,
-    lineHeight: 1.4,
-    marginBottom: 4,
+    fontSize: 7.5,
+    lineHeight: 1.3,
+    marginBottom: 3,
   },
   momentObs: {
     color: '#555',
-    fontSize: 7,
-    lineHeight: 1.3,
+    fontSize: 6.5,
+    lineHeight: 1.2,
     fontStyle: 'italic',
   },
   momentObsLabel: {
@@ -216,9 +212,6 @@ const s = StyleSheet.create({
   },
 })
 
-// Logo embebido como base64 - se carga desde /logo-dj.png en runtime
-const LOGO_URL = '/logo-dj.png'
-
 function MomentoBlock({ moment, index, coachName }: {
   moment: Moment; index: number; coachName: string
 }) {
@@ -226,7 +219,7 @@ function MomentoBlock({ moment, index, coachName }: {
     <View style={s.momentBox}>
       <View style={s.momentHeader}>
         <Text style={s.momentHeaderText}>
-          MOMENTO: {index + 1}{'  '}TIEMPO TAREA: {moment.duration_min} M{'  '}PROFE: {coachName}
+          MOMENTO: {index + 1}{'  '}TIEMPO: {moment.duration_min} MIN{'  '}PROFE: {coachName}
         </Text>
         {moment.exercise_category && (
           <Text style={s.momentHeaderBadge}>{moment.exercise_category.toUpperCase()}</Text>
@@ -267,6 +260,9 @@ function TrainingDocument({ session }: { session: TrainingSession }) {
   )
   const sorted = [...session.moments].sort((a, b) => a.order_index - b.order_index)
 
+  // URL absoluta del logo
+  const logoUrl = `${window.location.origin}/logo-dj.png`
+
   return (
     <Document title={`Entrenamiento ${session.team_category} - Sesión ${session.session_number}`}>
       <Page size="A4" orientation="landscape" style={s.page}>
@@ -296,24 +292,20 @@ function TrainingDocument({ session }: { session: TrainingSession }) {
                 <Text style={s.contentText}>{session.content_category}</Text>
               </View>
             </View>
-            <View style={s.objectiveRow}>
-              <Text style={s.objectiveText}>
-                {'Categoría: '}
-                <Text style={{ fontFamily: 'Helvetica-Bold' }}>{session.team_category}</Text>
-                {'   Prof.: '}
-                <Text style={{ fontFamily: 'Helvetica-Bold' }}>{session.coach_name}</Text>
-              </Text>
-              {session.general_objective ? (
-                <Text style={[s.objectiveText, { marginTop: 3 }]}>
-                  {'Objetivo: '}{session.general_objective}
-                </Text>
-              ) : null}
-            </View>
+            <Text style={s.objectiveText}>
+              {'Categoría: '}
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>{session.team_category}</Text>
+              {'   Prof.: '}
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>{session.coach_name}</Text>
+            </Text>
+            {session.general_objective ? (
+              <Text style={s.objectiveText}>{'Objetivo: '}{session.general_objective}</Text>
+            ) : null}
           </View>
 
-          {/* Derecha: logo real */}
+          {/* Derecha: logo real del club */}
           <View style={s.headerRight}>
-            <Image src={LOGO_URL} style={s.logoReal as Record<string,unknown>}/>
+            <Image src={logoUrl} style={s.logoReal as Record<string,unknown>}/>
           </View>
         </View>
 
