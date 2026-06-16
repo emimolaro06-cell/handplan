@@ -1,12 +1,13 @@
 // ─── Categorías de equipo ────────────────────────────────────────────────────
 export type TeamCategory =
-  | 'Infantiles'
-  | 'Menores'
-  | 'Cadetes'
-  | 'Juveniles'
-  | 'Primera'
+  | 'Minis A' | 'Minis B'
+  | 'Infantiles A' | 'Infantiles B'
+  | 'Menores A' | 'Menores B'
+  | 'Cadetes A' | 'Cadetes B'
+  | 'Juveniles A' | 'Juveniles B'
+  | 'Primera A' | 'Primera B'
 
-// ─── Categorías de contenido (para biblioteca) ────────────────────────────────
+// ─── Categorías de contenido ─────────────────────────────────────────────────
 export type ContentCategory =
   | 'Técnica individual OFENSIVA'
   | 'Técnica individual DEFENSIVA'
@@ -14,7 +15,7 @@ export type ContentCategory =
   | 'Táctica DEFENSIVA'
   | 'MIXTO'
 
-// ─── Categorías de ejercicio (para momentos) ─────────────────────────────────
+// ─── Categorías de ejercicio ─────────────────────────────────────────────────
 export type ExerciseCategory =
   | 'Calentamiento'
   | 'Técnica individual'
@@ -28,12 +29,12 @@ export type ExerciseCategory =
 // ─── Usuario / Perfil ────────────────────────────────────────────────────────
 export interface Profile {
   id: string
-  username: string          // nombre de usuario visible (sin email)
+  username: string
   full_name: string
   role: 'admin' | 'coach'
   categories: TeamCategory[]
   club_name: string
-  avatar_color: string      // color de avatar generado
+  avatar_color: string
   created_at: string
 }
 
@@ -50,7 +51,7 @@ export interface Moment {
   id: string
   session_id: string
   order_index: number
-  exercise_label: string    // texto de la lista desplegable
+  exercise_label: string
   duration_min: number
   exercise_category: ExerciseCategory
   image_url: string | null
@@ -69,8 +70,8 @@ export interface TrainingSession {
   coach_name: string
   team_category: TeamCategory
   content_category: ContentCategory
-  session_date: string          // 'YYYY-MM-DD'
-  session_number: number        // Sesión: N
+  session_date: string
+  session_number: number
   total_duration_min: number
   general_objective: string
   main_content: string
