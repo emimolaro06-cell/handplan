@@ -165,7 +165,7 @@ export function LibraryPage() {
       ) : (
         <div className="space-y-3">
           {sessions.map(s => {
-            const catStyle = TEAM_CATEGORY_STYLES[s.team_category as TeamCategory]
+            const catStyle = TEAM_CATEGORY_STYLES[s.team_category as TeamCategory] ?? { bg: "bg-gray-100", text: "text-gray-700", dot: "bg-gray-400" }
             // Formato: Fecha + CONTENIDO
             const fechaFormateada = format(new Date(s.session_date), "dd/MM/yyyy", { locale: es })
             const titulo = `${fechaFormateada} — ${s.content_category}`
