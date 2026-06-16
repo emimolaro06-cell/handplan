@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/handball-v1/src/lib/pdf.tsx
-Salida
-
 import {
   Document, Page, View, Text, Image, StyleSheet, pdf,
 } from '@react-pdf/renderer'
