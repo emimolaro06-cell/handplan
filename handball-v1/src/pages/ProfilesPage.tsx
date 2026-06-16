@@ -1,0 +1,118 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
+import { supabase, getProfile } from '@/lib/supabase'
+import { useAppStore } from '@/lib/store'
+import { CLUB_NAME } from '@/lib/constants'
+import { Spinner } from '@/components/ui/index'
+import type { Profile } from '@/types'
+
+export function ProfilesPage() {
+  const navigate = useNavigate()
+  const { setProfile } = useAppStore()
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Traer todos los perfiles del club
+    supabase
+      .from('profiles')
+      .select('*')
+      .order('full_name')
+      .then(({ data }) => {
+        setProfiles((data as Profile[]) ?? [])
+        setLoading(false)
+      })
+  }, [])
+
+  async function handleSelectProfile(profile: Profile) {
+    // Sign in automático con las credenciales generadas
+    const autoPassword = `DYJ_${profile.username}_2025`
+    const email = `${profile.username.toLowerCase().trim()}@hbdj.internal`
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password: autoPassword })
+    if (error) {
+      alert('Error al ingresar. Contactá al administrador.')
+      return
+    }
+
+    const { data: fullProfile } = await getProfile(profile.id)
+    if (fullProfile) {
+      setProfile(fullProfile)
+      navigate('/categoria')
+    }
+  }
+
+  // Iniciales para el avatar
+  function getInitials(name: string) {
+    return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  }
+
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'linear-gradient(135deg, #072d07 0%, #1e8a1e 50%, #0d420d 100%)' }}
+    >
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <button onClick={() => navigate('/')} className="text-white/60 hover:text-white">
+            <ArrowLeft size={20}/>
+          </button>
+          <div>
+            <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">{CLUB_NAME}</p>
+            <h1 className="text-xl font-bold text-white font-display">¿Quién sos?</h1>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Spinner size={36}/></div>
+        ) : profiles.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-white/60 text-sm">No hay perfiles todavía.</p>
+            <button
+              onClick={() => navigate('/registro')}
+              className="mt-4 text-gold-400 hover:text-gold-300 text-sm font-medium underline"
+            >
+              Crear el primero
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {profiles.map(profile => (
+              <button
+                key={profile.id}
+                onClick={() => handleSelectProfile(profile)}
+                className="group flex flex-col items-center gap-3 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-gold-400 rounded-2xl p-5 text-center transition-all active:scale-[0.97]"
+              >
+                {/* Avatar */}
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg group-hover:scale-105 transition-transform"
+                  style={{ backgroundColor: profile.avatar_color ?? '#1e8a1e' }}
+                >
+                  {getInitials(profile.full_name)}
+                </div>
+
+                {/* Nombre */}
+                <div>
+                  <p className="font-semibold text-white text-sm leading-tight">
+                    {profile.full_name}
+                  </p>
+                  {profile.categories?.length > 0 && (
+                    <p className="text-white/50 text-xs mt-1 leading-tight">
+                      {profile.categories.join(' · ')}
+                    </p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <p className="text-center text-white/30 text-xs mt-8">
+          Hacé clic en tu perfil para entrar
+        </p>
+      </div>
+    </div>
+  )
+}

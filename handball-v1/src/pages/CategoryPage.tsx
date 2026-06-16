@@ -1,28 +1,18 @@
-import { clsx } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { CheckCircle, ChevronRight } from 'lucide-react'
-
+import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/index'
-import { TEAM_CATEGORY_BG, TEAM_CATEGORY_STYLES, CLUB_NAME } from '@/lib/constants'
+import { TEAM_CATEGORY_BG, CLUB_NAME } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
-
-// Descripción orientativa por categoría
-const CAT_DESC: Record<TeamCategory, string> = {
-  Infantiles: 'Sub-12 · Iniciación al handball',
-  Menores:    'Sub-14 · Desarrollo técnico',
-  Cadetes:    'Sub-16 · Consolidación',
-  Juveniles:  'Sub-18 · Competencia juvenil',
-  Primera:    'Mayor · Competencia senior',
-}
 
 export function CategoryPage() {
   const navigate = useNavigate()
   const { profile, setSelectedCategory } = useAppStore()
   const [selected, setSelected] = useState<TeamCategory | null>(null)
 
-  if (!profile) { navigate('/login'); return null }
+  if (!profile) { navigate('/'); return null }
 
   function handleContinue() {
     if (!selected) return
@@ -38,8 +28,8 @@ export function CategoryPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gold-400/20 border-2 border-gold-400/40 mb-3">
-            <img src="/logo.svg" alt="Logo" className="w-12 h-12"/>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gold-400/20 border-2 border-gold-400/40 mb-3 overflow-hidden">
+            <img src="/logo-dj.png" alt="Logo" className="w-14 h-14 object-contain"/>
           </div>
           <p className="text-gold-400 text-xs font-bold uppercase tracking-widest mb-1">
             {CLUB_NAME}
@@ -52,12 +42,10 @@ export function CategoryPage() {
           </p>
         </div>
 
-        {/* Lista de categorías */}
-        <div className="space-y-3 mb-6">
+        {/* Lista de categorías — solo nombre, sin descripción */}
+        <div className="space-y-2 mb-6">
           {profile.categories.map((cat: TeamCategory) => {
             const isSelected = selected === cat
-            const styles = TEAM_CATEGORY_STYLES[cat]
-
             return (
               <button
                 key={cat}
@@ -69,28 +57,19 @@ export function CategoryPage() {
                     : 'bg-white/10 border-white/20 hover:bg-white/20 hover:border-white/40',
                 )}
               >
-                {/* Dot de color */}
                 <div className={clsx(
                   'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white text-xs font-bold',
                   TEAM_CATEGORY_BG[cat],
                 )}>
-                  {cat.slice(0,3).toUpperCase()}
+                  {cat.slice(0, 3).toUpperCase()}
                 </div>
 
-                <div className="flex-1">
-                  <p className={clsx(
-                    'font-semibold text-base',
-                    isSelected ? 'text-gray-900' : 'text-white',
-                  )}>
-                    {cat}
-                  </p>
-                  <p className={clsx(
-                    'text-xs mt-0.5',
-                    isSelected ? 'text-gray-500' : 'text-white/50',
-                  )}>
-                    {CAT_DESC[cat]}
-                  </p>
-                </div>
+                <p className={clsx(
+                  'font-semibold text-base flex-1',
+                  isSelected ? 'text-gray-900' : 'text-white',
+                )}>
+                  {cat}
+                </p>
 
                 {isSelected
                   ? <CheckCircle size={22} className="text-dj-600 flex-shrink-0"/>
@@ -101,7 +80,6 @@ export function CategoryPage() {
           })}
         </div>
 
-        {/* Botón continuar */}
         <Button
           className="w-full"
           size="lg"
@@ -112,10 +90,6 @@ export function CategoryPage() {
         >
           Continuar
         </Button>
-
-        <p className="text-center text-white/30 text-xs mt-4">
-          Podés cambiar de categoría desde el menú lateral
-        </p>
       </div>
     </div>
   )
