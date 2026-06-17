@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Check } from 'lucide-react'
-import { signUpWithUsername } from '@/lib/supabase'
+import { ArrowLeft, Check, Shield } from 'lucide-react'
+import { signUpWithUsername, supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { TEAM_CATEGORIES, AVATAR_COLORS, CLUB_NAME } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
 
+const ADMIN_CODE = 'ADMIN2026'
+
 interface RegForm {
   full_name: string
   username: string
+  admin_code?: string
 }
 
 export function RegisterPage() {
@@ -17,6 +20,7 @@ export function RegisterPage() {
   const setProfile = useAppStore(s => s.setProfile)
   const [selectedCats, setSelectedCats] = useState<TeamCategory[]>([])
   const [serverError, setServerError] = useState<string | null>(null)
+  const [showAdminCode, setShowAdminCode] = useState(false)
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegForm>()
 
@@ -26,67 +30,40 @@ export function RegisterPage() {
     )
   }
 
-  async function onSubmit({ full_name, username }: RegForm) {
-    if (selectedCats.length === 0) {
-      setServerError('Seleccioná al menos una categoría.')
-      return
-    }
+  async function onSubmit({ full_name, username, admin_code }: RegForm) {
+    if (selectedCats.length === 0) { setServerError('Seleccioná al menos una categoría.'); return }
     setServerError(null)
 
-    // Generar contraseña automática basada en username (el entrenador no la necesita)
+    const isAdmin = admin_code?.trim() === ADMIN_CODE
+    const role = isAdmin ? 'admin' : 'coach'
     const autoPassword = `DYJ_${username}_2025`
     const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
 
     const { data, error } = await signUpWithUsername(username, autoPassword, {
-      full_name,
-      role: 'coach',
-      club_name: CLUB_NAME,
-      avatar_color: avatarColor,
+      full_name, role, club_name: CLUB_NAME, avatar_color: avatarColor,
     })
 
     if (error || !data.user) {
-      if (error?.message?.includes('already')) {
-        setServerError('Ese nombre de usuario ya existe. Elegí otro.')
-      } else {
-        setServerError('Error al crear el perfil. Intentá de nuevo.')
-      }
+      setServerError(error?.message?.includes('already') ? 'Ese usuario ya existe.' : 'Error al crear el perfil.')
       return
     }
 
-    // Actualizar categorías en el perfil
-    const { supabase } = await import('@/lib/supabase')
-    await supabase
-      .from('profiles')
-      .update({ categories: selectedCats, avatar_color: avatarColor })
+    await supabase.from('profiles')
+      .update({ categories: selectedCats, avatar_color: avatarColor, role })
       .eq('id', data.user.id)
 
-    // Buscar perfil actualizado
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single()
-
-    if (profile) {
-      setProfile(profile)
-      navigate('/categoria')
-    }
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
+    if (profile) { setProfile(profile); navigate(isAdmin ? '/admin' : '/categoria') }
   }
 
-  // Agrupar categorías de a pares (A y B juntas)
   const baseCats = ['Minis', 'Infantiles', 'Menores', 'Cadetes', 'Juveniles', 'Primera']
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #072d07 0%, #1e8a1e 50%, #0d420d 100%)' }}
-    >
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'linear-gradient(135deg, #072d07 0%, #1e8a1e 50%, #0d420d 100%)' }}>
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/')} className="text-white/60 hover:text-white">
-            <ArrowLeft size={20}/>
-          </button>
+          <button onClick={() => navigate('/')} className="text-white/60 hover:text-white"><ArrowLeft size={20}/></button>
           <div>
             <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">{CLUB_NAME}</p>
             <h1 className="text-xl font-bold text-white font-display">Crear perfil</h1>
@@ -95,33 +72,24 @@ export function RegisterPage() {
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-dj-700 via-gold-400 to-dj-700"/>
-          <div className="p-6 space-y-5">
+          <div className="p-6">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Nombre */}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Nombre completo</label>
-                <input
-                  placeholder="Ej: Emanuel García"
+                <input placeholder="Ej: Emanuel García"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
-                  {...register('full_name', { required: 'Obligatorio' })}
-                />
+                  {...register('full_name', { required: 'Obligatorio' })}/>
                 {errors.full_name && <p className="text-xs text-red-600">{errors.full_name.message}</p>}
               </div>
 
-              {/* Usuario */}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Nombre de usuario</label>
-                <input
-                  placeholder="Ej: emi_garcia"
+                <input placeholder="Ej: emi_garcia"
                   className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
                   {...register('username', {
                     required: 'Obligatorio',
-                    pattern: {
-                      value: /^[a-zA-Z0-9_]+$/,
-                      message: 'Solo letras, números y guión bajo'
-                    }
-                  })}
-                />
+                    pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Solo letras, números y guión bajo' }
+                  })}/>
                 {errors.username && <p className="text-xs text-red-600">{errors.username.message}</p>}
               </div>
 
@@ -135,20 +103,13 @@ export function RegisterPage() {
                     <div key={base} className="flex gap-2">
                       {(['A', 'B'] as const).map(letra => {
                         const cat = `${base} ${letra}` as TeamCategory
-                        const selected = selectedCats.includes(cat)
+                        const sel = selectedCats.includes(cat)
                         return (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => toggleCat(cat)}
+                          <button key={cat} type="button" onClick={() => toggleCat(cat)}
                             className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
-                              selected
-                                ? 'bg-dj-600 border-dj-600 text-white'
-                                : 'bg-white border-gray-200 text-gray-700 hover:border-dj-400'
-                            }`}
-                          >
-                            {cat}
-                            {selected && <Check size={14}/>}
+                              sel ? 'bg-dj-600 border-dj-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-dj-400'
+                            }`}>
+                            {cat} {sel && <Check size={14}/>}
                           </button>
                         )
                       })}
@@ -162,17 +123,28 @@ export function RegisterPage() {
                 )}
               </div>
 
+              {/* Código admin (opcional) */}
+              <div>
+                <button type="button" onClick={() => setShowAdminCode(!showAdminCode)}
+                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                  <Shield size={12}/>
+                  {showAdminCode ? 'Ocultar código de administrador' : '¿Sos administrador?'}
+                </button>
+                {showAdminCode && (
+                  <div className="mt-2">
+                    <input type="password" placeholder="Código de administrador"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                      {...register('admin_code')}/>
+                  </div>
+                )}
+              </div>
+
               {serverError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2.5 rounded-xl">
-                  {serverError}
-                </div>
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2.5 rounded-xl">{serverError}</div>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-dj-600 hover:bg-dj-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
-              >
+              <button type="submit" disabled={isSubmitting}
+                className="w-full bg-dj-600 hover:bg-dj-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50">
                 {isSubmitting ? 'Creando perfil...' : 'Crear perfil'}
               </button>
             </form>
