@@ -14,6 +14,7 @@ import { LibraryPage }        from '@/pages/LibraryPage'
 import { ExercisesPage }      from '@/pages/ExercisesPage'
 import { MonthlyPlanPage }    from '@/pages/MonthlyPlanPage'
 import { SharedSessionPage }  from '@/pages/SharedSessionPage'
+import { AdminPage }          from '@/pages/AdminPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -34,6 +35,8 @@ function CategoryGuard({ children }: { children: React.ReactNode }) {
   const selectedCategory = useAppStore(s => s.selectedCategory)
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-dj-900"><Spinner size={36}/></div>
   if (!profile) return <Navigate to="/" replace/>
+  // Admin no necesita categoría
+  if (profile.role === 'admin') return <>{children}</>
   if (!selectedCategory) return <Navigate to="/categoria" replace/>
   return <>{children}</>
 }
@@ -46,22 +49,20 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Públicas */}
         <Route path="/"          element={<ClubCodePage/>}/>
         <Route path="/registro"  element={<RegisterPage/>}/>
         <Route path="/perfiles"  element={<ProfilesPage/>}/>
         <Route path="/compartido/:token" element={<SharedSessionPage/>}/>
 
-        {/* Auth */}
         <Route path="/categoria" element={<AuthGuard><CategoryPage/></AuthGuard>}/>
         <Route path="/menu"      element={<CategoryGuard><MenuPage/></CategoryGuard>}/>
 
-        {/* App */}
         <Route path="/crear"             element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/entrenamiento/:id" element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
         <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
         <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
+        <Route path="/admin"             element={<WithLayout><AdminPage/></WithLayout>}/>
 
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
