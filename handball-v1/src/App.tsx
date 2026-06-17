@@ -13,6 +13,7 @@ import { TrainingEditorPage } from '@/pages/TrainingEditorPage'
 import { LibraryPage }        from '@/pages/LibraryPage'
 import { ExercisesPage }      from '@/pages/ExercisesPage'
 import { MonthlyPlanPage }    from '@/pages/MonthlyPlanPage'
+import { SharedSessionPage }  from '@/pages/SharedSessionPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -45,12 +46,17 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Públicas */}
         <Route path="/"          element={<ClubCodePage/>}/>
         <Route path="/registro"  element={<RegisterPage/>}/>
         <Route path="/perfiles"  element={<ProfilesPage/>}/>
+        <Route path="/compartido/:token" element={<SharedSessionPage/>}/>
+
+        {/* Auth */}
         <Route path="/categoria" element={<AuthGuard><CategoryPage/></AuthGuard>}/>
         <Route path="/menu"      element={<CategoryGuard><MenuPage/></CategoryGuard>}/>
 
+        {/* App */}
         <Route path="/crear"             element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/entrenamiento/:id" element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
