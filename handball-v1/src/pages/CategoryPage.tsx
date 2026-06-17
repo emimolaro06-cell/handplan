@@ -13,6 +13,7 @@ export function CategoryPage() {
   const [selected, setSelected] = useState<TeamCategory | null>(null)
 
   if (!profile) { navigate('/'); return null }
+  if (profile.role === 'admin') { navigate('/admin'); return null }
 
   function handleContinue() {
     if (!selected) return
