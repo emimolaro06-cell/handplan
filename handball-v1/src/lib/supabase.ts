@@ -214,3 +214,24 @@ export async function uploadImage(
   const { data } = supabase.storage.from(bucket).getPublicUrl(path)
   return { url: data.publicUrl, error: null }
 }
+
+// ─── Compartir entrenamientos ─────────────────────────────────────────────────
+export async function createShareLink(sessionId: string) {
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  const { data, error } = await supabase
+    .from('shared_sessions')
+    .insert({ session_id: sessionId, token, expires_at: null })
+    .select()
+    .single()
+  return { token: (data as { token: string } | null)?.token ?? null, error }
+}
+
+export async function getSharedSession(token: string) {
+  const { data, error } = await supabase
+    .from('shared_sessions')
+    .select('session_id')
+    .eq('token', token)
+    .single()
+  if (error || !data) return { data: null, error }
+  return getSessionById((data as { session_id: string }).session_id)
+}
