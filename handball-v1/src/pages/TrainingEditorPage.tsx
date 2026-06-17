@@ -16,6 +16,8 @@ import {
   createSession, updateSession, getSessionById, getExerciseLabels,
 } from '@/lib/supabase'
 import { downloadTrainingPDF } from '@/lib/pdf'
+import { PDFPreview } from '@/components/training/PDFPreview'
+import { createShareLink } from '@/lib/supabase'
 import { Input, Textarea, Select, Button, Card, Toast, Spinner } from '@/components/ui/index'
 import { MomentCard } from '@/components/training/MomentCard'
 import { TEAM_CATEGORIES, CONTENT_CATEGORIES } from '@/lib/constants'
@@ -171,6 +173,39 @@ export function TrainingEditorPage() {
       moments:    moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
     await downloadTrainingPDF(session)
+  }
+
+  async function onPreview(formData: SessionFormData) {
+    const s = await save(formData)
+    if (!s) return
+    const fullSession: TrainingSession = {
+      ...(formData as SessionFormData),
+      id: s.id ?? sessionId ?? 'preview',
+      user_id: profile?.id ?? '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: s.id ?? '' })),
+    }
+    setPreviewSession(fullSession)
+    setShowPreview(true)
+  }
+
+  async function onShare(formData: SessionFormData) {
+    const s = await save(formData)
+    if (!s) return
+    setSharing(true)
+    const { token, error } = await createShareLink(s.id)
+    setSharing(false)
+    if (error || !token) { setToast({ msg: 'Error al generar enlace.', type: 'error' }); return }
+    const url = `${window.location.origin}/compartido/${token}`
+    setShareUrl(url)
+  }
+
+  async function copyShareUrl() {
+    if (!shareUrl) return
+    await navigator.clipboard.writeText(shareUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const catOptions     = TEAM_CATEGORIES.map(c => ({ value: c, label: c }))
@@ -341,6 +376,44 @@ export function TrainingEditorPage() {
           </Button>
         </div>
       </form>
+
+      {/* Vista previa PDF */}
+      {showPreview && previewSession && (
+        <PDFPreview
+          session={previewSession}
+          onClose={() => setShowPreview(false)}
+          onDownload={() => { downloadTrainingPDF(previewSession); setShowPreview(false) }}
+        />
+      )}
+
+      {/* Modal compartir */}
+      {shareUrl && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="font-bold text-gray-900">Enlace para compartir</h3>
+            <p className="text-sm text-gray-600">
+              Cualquier persona con este enlace puede ver el entrenamiento y descargar el PDF, sin necesidad de iniciar sesión.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={shareUrl}
+                readOnly
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 bg-gray-50"
+              />
+              <button
+                onClick={copyShareUrl}
+                className="flex items-center gap-1.5 bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+              >
+                {copied ? <Check size={14}/> : <Copy size={14}/>}
+                {copied ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
+            <button onClick={() => setShareUrl(null)} className="w-full text-sm text-gray-500 hover:text-gray-700">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
     </div>
