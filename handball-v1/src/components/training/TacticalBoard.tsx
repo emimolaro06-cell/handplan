@@ -179,7 +179,7 @@ export function TacticalBoard({ onSave, onClose }: {
   function setCourt(m: CourtMode) { courtRef.current=m; setCourtState(m); redraw() }
 
   const dragRef = useRef<{
-    mode: 'none' | 'elem' | 'control' | 'arrow'
+    mode: 'none' | 'elem' | 'control' | 'arrow' | 'arrow-start' | 'arrow-end' | 'arrow-move'
     id?: string
     offX?: number; offY?: number
     startPt?: Pt
@@ -194,7 +194,17 @@ export function TacticalBoard({ onSave, onClose }: {
     drawCourtFn(ctx, courtRef.current)
     bs.arrows.forEach(a => drawArrowFn(ctx, a))
     if (showCtrlRef.current) {
-      bs.arrows.filter(a => a.type==='arrow-curve').forEach(a => drawControlFn(ctx, a))
+      bs.arrows.forEach(a => {
+        // Punto inicio (cuadrado blanco)
+        ctx.fillStyle='white'; ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.5
+        ctx.fillRect(a.x1-6, a.y1-6, 12, 12)
+        ctx.strokeRect(a.x1-6, a.y1-6, 12, 12)
+        // Punto fin (cuadrado blanco)
+        ctx.fillRect(a.x2-6, a.y2-6, 12, 12)
+        ctx.strokeRect(a.x2-6, a.y2-6, 12, 12)
+        // Control point curva
+        if (a.type==='arrow-curve') drawControlFn(ctx, a)
+      })
     }
     bs.elems.forEach(el => drawElemFn(ctx, el, el.id===selectedRef.current))
   }
@@ -218,6 +228,28 @@ export function TacticalBoard({ onSave, onClose }: {
       a.type==='arrow-curve' && a.cx!==undefined && a.cy!==undefined &&
       Math.hypot(a.cx-p.x, a.cy-p.y)<18
     ) ?? null
+  }
+
+  // Buscar si el punto está cerca del inicio de una flecha
+  function findArrowStart(p: Pt): Arrow | null {
+    return [...stateRef.current.arrows].reverse().find(a =>
+      Math.hypot(a.x1-p.x, a.y1-p.y)<14
+    ) ?? null
+  }
+
+  // Buscar si el punto está cerca del final de una flecha
+  function findArrowEnd(p: Pt): Arrow | null {
+    return [...stateRef.current.arrows].reverse().find(a =>
+      Math.hypot(a.x2-p.x, a.y2-p.y)<14
+    ) ?? null
+  }
+
+  // Buscar si el punto está sobre el cuerpo de una flecha (para moverla)
+  function findArrowBody(p: Pt): Arrow | null {
+    return [...stateRef.current.arrows].reverse().find(a => {
+      const mx = (a.x1+a.x2)/2, my = (a.y1+a.y2)/2
+      return Math.hypot(mx-p.x, my-p.y) < 22
+    }) ?? null
   }
 
   function commitState(ns: BoardState) {
@@ -255,11 +287,24 @@ export function TacticalBoard({ onSave, onClose }: {
     }
 
     if (t === 'select') {
-      // Primero ver si hay control point
+      // 1. Control point de curva
       const curve = findCurveCtrl(p)
-      if (curve) {
-        d.mode='control'; d.id=curve.id; return
+      if (curve) { d.mode='control'; d.id=curve.id; return }
+      // 2. Extremo final de flecha (mover punta)
+      const arrowEnd = findArrowEnd(p)
+      if (arrowEnd) { d.mode='arrow-end'; d.id=arrowEnd.id; return }
+      // 3. Extremo inicio de flecha (mover cola)
+      const arrowStart = findArrowStart(p)
+      if (arrowStart) { d.mode='arrow-start'; d.id=arrowStart.id; return }
+      // 4. Cuerpo de flecha (mover toda)
+      const arrowBody = findArrowBody(p)
+      if (arrowBody) {
+        d.mode='arrow-move'; d.id=arrowBody.id
+        d.offX=p.x-(arrowBody.x1+arrowBody.x2)/2
+        d.offY=p.y-(arrowBody.y1+arrowBody.y2)/2
+        return
       }
+      // 5. Elemento
       const el = findElem(p)
       if (el) {
         selectedRef.current = el.id
@@ -307,8 +352,56 @@ export function TacticalBoard({ onSave, onClose }: {
           a.id===d.id ? { ...a, cx:p.x, cy:p.y } : a
         )
       }
-      stateRef.current = ns
-      redraw(ns); return
+      stateRef.current = ns; redraw(ns); return
+    }
+
+    if (d.mode === 'arrow-end' && d.id) {
+      const ns = {
+        ...stateRef.current,
+        arrows: stateRef.current.arrows.map(a =>
+          a.id===d.id ? { ...a, x2:p.x, y2:p.y,
+            cx: a.type==='arrow-curve' ? (a.x1+p.x)/2 : a.cx,
+            cy: a.type==='arrow-curve' ? Math.min(a.y1,p.y)-70 : a.cy,
+          } : a
+        )
+      }
+      stateRef.current = ns; redraw(ns); return
+    }
+
+    if (d.mode === 'arrow-start' && d.id) {
+      const ns = {
+        ...stateRef.current,
+        arrows: stateRef.current.arrows.map(a =>
+          a.id===d.id ? { ...a, x1:p.x, y1:p.y,
+            cx: a.type==='arrow-curve' ? (p.x+a.x2)/2 : a.cx,
+            cy: a.type==='arrow-curve' ? Math.min(p.y,a.y2)-70 : a.cy,
+          } : a
+        )
+      }
+      stateRef.current = ns; redraw(ns); return
+    }
+
+    if (d.mode === 'arrow-move' && d.id) {
+      const arrow = stateRef.current.arrows.find(a => a.id===d.id)
+      if (!arrow) return
+      const dx = p.x-(d.offX??0)-(arrow.x1+arrow.x2)/2
+      const dy = p.y-(d.offY??0)-(arrow.y1+arrow.y2)/2
+      const ns = {
+        ...stateRef.current,
+        arrows: stateRef.current.arrows.map(a =>
+          a.id===d.id ? {
+            ...a,
+            x1: a.x1+dx, y1: a.y1+dy,
+            x2: a.x2+dx, y2: a.y2+dy,
+            cx: a.cx !== undefined ? a.cx+dx : undefined,
+            cy: a.cy !== undefined ? a.cy+dy : undefined,
+          } : a
+        )
+      }
+      // Actualizar offX/Y para el siguiente frame
+      d.offX = p.x - (ns.arrows.find(a=>a.id===d.id)!.x1 + ns.arrows.find(a=>a.id===d.id)!.x2)/2
+      d.offY = p.y - (ns.arrows.find(a=>a.id===d.id)!.y1 + ns.arrows.find(a=>a.id===d.id)!.y2)/2
+      stateRef.current = ns; redraw(ns); return
     }
 
     if (d.mode === 'arrow' && d.startPt) {
@@ -340,11 +433,7 @@ export function TacticalBoard({ onSave, onClose }: {
     const p = getPos(e)
     const d = dragRef.current
 
-    if (d.mode === 'elem') {
-      d.mode='none'; commitState(stateRef.current); return
-    }
-
-    if (d.mode === 'control') {
+    if (['elem','control','arrow-start','arrow-end','arrow-move'].includes(d.mode)) {
       d.mode='none'; commitState(stateRef.current); return
     }
 
