@@ -1,4 +1,3 @@
-import { clsx } from '@/lib/utils'
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -9,40 +8,35 @@ import {
   SortableContext, sortableKeyboardCoordinates,
   verticalListSortingStrategy, arrayMove,
 } from '@dnd-kit/sortable'
-import { PlusCircle, Save, FileDown, ArrowLeft, AlertCircle } from 'lucide-react'
+import {
+  PlusCircle, Save, FileDown, ArrowLeft, AlertCircle,
+  BookmarkPlus, Eye, Share2, Copy, Check,
+} from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useAppStore } from '@/lib/store'
-import {
-  createSession, updateSession, getSessionById, getExerciseLabels,
-} from '@/lib/supabase'
+import { createSession, updateSession, getSessionById, getExerciseLabels, createShareLink } from '@/lib/supabase'
 import { downloadTrainingPDF } from '@/lib/pdf'
-import { PDFPreview } from '@/components/training/PDFPreview'
-import { createShareLink } from '@/lib/supabase'
 import { Input, Textarea, Select, Button, Card, Toast, Spinner } from '@/components/ui/index'
 import { MomentCard } from '@/components/training/MomentCard'
+import { PDFPreview } from '@/components/training/PDFPreview'
 import { TEAM_CATEGORIES, CONTENT_CATEGORIES } from '@/lib/constants'
-import type { Moment, SessionFormData, TrainingSession, ExerciseLabel, ContentCategory, TeamCategory } from '@/types'
+import type { Moment, SessionFormData, TrainingSession, ExerciseLabel } from '@/types'
 
 function tmpId() { return `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}` }
 
 function blankMoment(): Moment {
   return {
-    id: tmpId(),
-    session_id: '',
-    order_index: 0,
-    exercise_label: '',
-    duration_min: 10,
+    id: tmpId(), session_id: '', order_index: 0,
+    exercise_label: '', duration_min: 10,
     exercise_category: 'Técnica individual',
-    image_url: null,
-    description: '',
-    observations: '',
+    image_url: null, description: '', observations: '',
   }
 }
 
 export function TrainingEditorPage() {
-  const navigate   = useNavigate()
-  const { id }     = useParams<{ id?: string }>()
-  const isEdit     = Boolean(id)
+  const navigate = useNavigate()
+  const { id }   = useParams<{ id?: string }>()
+  const isEdit   = Boolean(id)
   const { profile, selectedCategory } = useAppStore()
 
   const [moments, setMoments]               = useState<Moment[]>([blankMoment()])
@@ -51,6 +45,15 @@ export function TrainingEditorPage() {
   const [saving, setSaving]                 = useState(false)
   const [toast, setToast]                   = useState<{ msg: string; type: 'success'|'error' } | null>(null)
   const [sessionId, setSessionId]           = useState<string | null>(null)
+
+  // Vista previa
+  const [showPreview, setShowPreview]       = useState(false)
+  const [previewSession, setPreviewSession] = useState<TrainingSession | null>(null)
+
+  // Compartir
+  const [shareUrl, setShareUrl]   = useState<string | null>(null)
+  const [sharing, setSharing]     = useState(false)
+  const [copied, setCopied]       = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -62,12 +65,12 @@ export function TrainingEditorPage() {
   const { register, handleSubmit, reset, watch, formState: { errors } } =
     useForm<SessionFormData>({
       defaultValues: {
-        session_date:      today,
-        team_category:     selectedCategory ?? undefined,
-        coach_name:        profile?.full_name ?? '',
+        session_date: today,
+        team_category: selectedCategory ?? undefined,
+        coach_name: profile?.full_name ?? '',
         total_duration_min: 90,
-        session_number:    1,
-        status:            'saved',
+        session_number: 1,
+        status: 'saved',
       },
     })
 
@@ -77,24 +80,18 @@ export function TrainingEditorPage() {
 
   useEffect(() => {
     getExerciseLabels().then(({ data }) => setExerciseLabels((data as ExerciseLabel[]) ?? []))
-
     if (!isEdit || !id) return
     getSessionById(id).then(({ data, error }) => {
       if (error || !data) { navigate('/biblioteca'); return }
       const s = data as TrainingSession
       reset({
-        session_date:       s.session_date,
-        team_category:      s.team_category,
-        content_category:   s.content_category,
-        coach_name:         s.coach_name,
-        total_duration_min: s.total_duration_min,
-        session_number:     s.session_number,
-        general_objective:  s.general_objective,
-        main_content:       s.main_content,
-        status:             s.status,
+        session_date: s.session_date, team_category: s.team_category,
+        content_category: s.content_category, coach_name: s.coach_name,
+        total_duration_min: s.total_duration_min, session_number: s.session_number,
+        general_objective: s.general_objective, main_content: s.main_content,
+        status: s.status,
       })
-      const sorted = [...s.moments].sort((a, b) => a.order_index - b.order_index)
-      setMoments(sorted)
+      setMoments([...s.moments].sort((a, b) => a.order_index - b.order_index))
       setSessionId(s.id)
       setLoading(false)
     })
@@ -111,66 +108,41 @@ export function TrainingEditorPage() {
     }
   }
 
-  function moveUp(i: number) {
-    if (i === 0) return
-    setMoments(prev => arrayMove(prev, i, i - 1))
-  }
-  function moveDown(i: number) {
-    if (i === moments.length - 1) return
-    setMoments(prev => arrayMove(prev, i, i + 1))
-  }
+  function moveUp(i: number)   { if (i > 0) setMoments(prev => arrayMove(prev, i, i-1)) }
+  function moveDown(i: number) { if (i < moments.length-1) setMoments(prev => arrayMove(prev, i, i+1)) }
 
-  const updateMoment = useCallback((id: string, m: Moment) => setMoments(p => p.map(x => x.id === id ? m : x)), [])
-  const removeMoment = useCallback((id: string) => setMoments(p => p.filter(x => x.id !== id)), [])
+  const updateMoment = useCallback((id: string, m: Moment) => setMoments(p => p.map(x => x.id===id ? m : x)), [])
+  const removeMoment = useCallback((id: string) => setMoments(p => p.filter(x => x.id!==id)), [])
 
-  async function save(formData: SessionFormData) {
+  // ─── Guardar ───────────────────────────────────────────────────────────────
+  async function save(formData: SessionFormData, status: 'draft'|'saved' = 'saved') {
     if (!profile) return null
     setSaving(true)
-
     const momentRows = moments.map((m, i) => ({
-      exercise_label:    m.exercise_label,
-      duration_min:      m.duration_min,
-      exercise_category: m.exercise_category,
-      image_url:         m.image_url,
-      description:       m.description,
-      observations:      m.observations,
-      order_index:       i,
+      exercise_label: m.exercise_label, duration_min: m.duration_min,
+      exercise_category: m.exercise_category, image_url: m.image_url,
+      description: m.description, observations: m.observations, order_index: i,
     }))
-
-    // Siempre status 'saved' — solo se guarda cuando el entrenador lo pide
-    const sessionData = { ...formData, status: 'saved' }
-
+    const sessionData = { ...formData, status }
     let result
-    if (isEdit && sessionId) {
-      result = await updateSession(sessionId, sessionData, momentRows)
-    } else {
-      result = await createSession(profile.id, sessionData, momentRows)
-    }
-
+    if (isEdit && sessionId) result = await updateSession(sessionId, sessionData, momentRows)
+    else result = await createSession(profile.id, sessionData, momentRows)
     setSaving(false)
-
-    if (result.error) {
-      setToast({ msg: 'Error al guardar. Intentá de nuevo.', type: 'error' })
-      return null
-    }
-
+    if (result.error) { setToast({ msg: 'Error al guardar.', type: 'error' }); return null }
     if (!isEdit && result.data) setSessionId(result.data.id)
-    setToast({ msg: isEdit ? 'Entrenamiento actualizado y guardado en biblioteca.' : 'Entrenamiento guardado en biblioteca.', type: 'success' })
+    setToast({ msg: isEdit ? 'Actualizado.' : 'Guardado.', type: 'success' })
     return result.data
   }
 
-  async function onSave(formData: SessionFormData) {
-    await save(formData)
-  }
+  async function onSave(formData: SessionFormData)      { await save(formData) }
+  async function onSaveDraft(formData: SessionFormData) { await save(formData, 'draft') }
 
   async function onExportPDF(formData: SessionFormData) {
     const session: TrainingSession = {
       ...(formData as SessionFormData),
-      id:         sessionId ?? 'preview',
-      user_id:    profile?.id ?? '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      moments:    moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
+      id: sessionId ?? 'preview', user_id: profile?.id ?? '',
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
     await downloadTrainingPDF(session)
   }
@@ -178,15 +150,13 @@ export function TrainingEditorPage() {
   async function onPreview(formData: SessionFormData) {
     const s = await save(formData)
     if (!s) return
-    const fullSession: TrainingSession = {
+    const session: TrainingSession = {
       ...(formData as SessionFormData),
-      id: s.id ?? sessionId ?? 'preview',
-      user_id: profile?.id ?? '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      id: s.id ?? sessionId ?? 'preview', user_id: profile?.id ?? '',
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: s.id ?? '' })),
     }
-    setPreviewSession(fullSession)
+    setPreviewSession(session)
     setShowPreview(true)
   }
 
@@ -197,8 +167,7 @@ export function TrainingEditorPage() {
     const { token, error } = await createShareLink(s.id)
     setSharing(false)
     if (error || !token) { setToast({ msg: 'Error al generar enlace.', type: 'error' }); return }
-    const url = `${window.location.origin}/compartido/${token}`
-    setShareUrl(url)
+    setShareUrl(`${window.location.origin}/compartido/${token}`)
   }
 
   async function copyShareUrl() {
@@ -211,12 +180,11 @@ export function TrainingEditorPage() {
   const catOptions     = TEAM_CATEGORIES.map(c => ({ value: c, label: c }))
   const contentOptions = CONTENT_CATEGORIES.map(c => ({ value: c, label: c }))
 
-  if (loading) {
-    return <div className="flex justify-center items-center py-24"><Spinner size={36}/></div>
-  }
+  if (loading) return <div className="flex justify-center items-center py-24"><Spinner size={36}/></div>
 
   return (
     <div className="space-y-6 pb-10">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 p-1 -ml-1">
           <ArrowLeft size={20}/>
@@ -225,9 +193,7 @@ export function TrainingEditorPage() {
           <h1 className="text-xl font-bold text-gray-900 font-display">
             {isEdit ? 'Editar entrenamiento' : 'Nuevo entrenamiento'}
           </h1>
-          <p className="text-gray-500 text-xs mt-0.5">
-            Completá los datos y agregá los momentos. Cuando termines, guardá el entrenamiento.
-          </p>
+          <p className="text-gray-500 text-xs mt-0.5">Completá los datos y agregá los momentos</p>
         </div>
       </div>
 
@@ -239,62 +205,28 @@ export function TrainingEditorPage() {
             Datos generales
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Input
-              label="Fecha"
-              type="date"
-              error={errors.session_date?.message}
-              {...register('session_date', { required: 'Obligatorio' })}
-            />
-            <Input
-              label="N° de sesión"
-              type="number"
-              min={1}
-              error={errors.session_number?.message}
-              {...register('session_number', { required: 'Obligatorio', valueAsNumber: true })}
-            />
-            <Select
-              label="Categoría"
-              options={catOptions}
-              placeholder="Seleccioná..."
+            <Input label="Fecha" type="date" error={errors.session_date?.message}
+              {...register('session_date', { required: 'Obligatorio' })}/>
+            <Input label="N° de sesión" type="number" min={1} error={errors.session_number?.message}
+              {...register('session_number', { required: 'Obligatorio', valueAsNumber: true })}/>
+            <Select label="Categoría" options={catOptions} placeholder="Seleccioná..."
               error={errors.team_category?.message}
-              {...register('team_category', { required: 'Obligatorio' })}
-            />
-            <Input
-              label="Profesor/a"
-              placeholder="Nombre completo"
-              error={errors.coach_name?.message}
-              {...register('coach_name', { required: 'Obligatorio' })}
-            />
-            <Input
-              label="Duración total (min)"
-              type="number"
-              min={10}
-              max={300}
-              {...register('total_duration_min', { required: 'Obligatorio', valueAsNumber: true })}
-            />
-            <Select
-              label="Categoría de contenido"
-              options={contentOptions}
-              placeholder="Seleccioná..."
+              {...register('team_category', { required: 'Obligatorio' })}/>
+            <Input label="Profesor/a" placeholder="Nombre completo" error={errors.coach_name?.message}
+              {...register('coach_name', { required: 'Obligatorio' })}/>
+            <Input label="Duración total (min)" type="number" min={10} max={300}
+              {...register('total_duration_min', { required: 'Obligatorio', valueAsNumber: true })}/>
+            <Select label="Categoría de contenido" options={contentOptions} placeholder="Seleccioná..."
               error={errors.content_category?.message}
-              {...register('content_category', { required: 'Obligatorio' })}
-            />
+              {...register('content_category', { required: 'Obligatorio' })}/>
             <div className="sm:col-span-2 lg:col-span-3">
-              <Textarea
-                label="Objetivo general"
-                placeholder="¿Qué se busca lograr en este entrenamiento?"
-                rows={2}
+              <Textarea label="Objetivo general" placeholder="¿Qué se busca lograr?" rows={2}
                 error={errors.general_objective?.message}
-                {...register('general_objective', { required: 'Obligatorio' })}
-              />
+                {...register('general_objective', { required: 'Obligatorio' })}/>
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
-              <Textarea
-                label="Contenido principal"
-                placeholder="Descripción del contenido central..."
-                rows={2}
-                {...register('main_content')}
-              />
+              <Textarea label="Contenido principal" placeholder="Descripción del contenido..." rows={2}
+                {...register('main_content')}/>
             </div>
           </div>
         </Card>
@@ -307,23 +239,13 @@ export function TrainingEditorPage() {
                 <span className="w-6 h-6 rounded-lg bg-dj-700 text-white text-xs flex items-center justify-center font-bold">2</span>
                 Momentos
               </h2>
-              <div className={clsx(
-                'flex items-center gap-1.5 mt-1 text-xs font-medium',
-                durationDiff > 5 ? 'text-amber-600' : durationDiff < -15 ? 'text-blue-500' : 'text-gray-500',
-              )}>
+              <div className={`flex items-center gap-1.5 mt-1 text-xs font-medium ${durationDiff > 5 ? 'text-amber-600' : 'text-gray-500'}`}>
                 {durationDiff > 5 && <AlertCircle size={12}/>}
-                Suma de momentos: <span className="font-bold">{momentMinutes} min</span>
-                {' / '}{totalDuration || '?'} min planificados
-                {durationDiff > 5 && ` · ${durationDiff} min de exceso`}
+                Suma: <span className="font-bold">{momentMinutes} min</span> / {totalDuration || '?'} min
               </div>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              icon={<PlusCircle size={15}/>}
-              onClick={() => setMoments(prev => [...prev, blankMoment()])}
-            >
+            <Button type="button" variant="secondary" size="sm" icon={<PlusCircle size={15}/>}
+              onClick={() => setMoments(prev => [...prev, blankMoment()])}>
               Agregar momento
             </Button>
           </div>
@@ -332,19 +254,12 @@ export function TrainingEditorPage() {
             <SortableContext items={moments.map(m => m.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {moments.map((m, i) => (
-                  <MomentCard
-                    key={m.id}
-                    moment={m}
-                    index={i}
-                    total={moments.length}
-                    exerciseLabels={exerciseLabels}
-                    onLabelsChange={setExerciseLabels}
+                  <MomentCard key={m.id} moment={m} index={i} total={moments.length}
+                    exerciseLabels={exerciseLabels} onLabelsChange={setExerciseLabels}
                     onChange={updated => updateMoment(m.id, updated)}
                     onRemove={() => removeMoment(m.id)}
-                    onMoveUp={() => moveUp(i)}
-                    onMoveDown={() => moveDown(i)}
-                    userId={profile?.id ?? ''}
-                  />
+                    onMoveUp={() => moveUp(i)} onMoveDown={() => moveDown(i)}
+                    userId={profile?.id ?? ''}/>
                 ))}
               </div>
             </SortableContext>
@@ -354,7 +269,7 @@ export function TrainingEditorPage() {
             <div className="border-2 border-dashed border-gray-200 rounded-2xl py-12 text-center">
               <p className="text-gray-400 text-sm mb-2">Sin momentos todavía</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => setMoments([blankMoment()])}>
-                + Agregar el primer momento
+                + Agregar el primero
               </Button>
             </div>
           )}
@@ -362,17 +277,24 @@ export function TrainingEditorPage() {
 
         {/* Acciones */}
         <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
-          <Button type="submit" loading={saving} icon={<Save size={16}/>} size="lg">
-            Guardar entrenamiento
+          <Button type="submit" loading={saving} icon={<Save size={16}/>}>
+            Guardar
           </Button>
-          <Button
-            type="button"
-            variant="gold"
-            icon={<FileDown size={16}/>}
-            onClick={handleSubmit(onExportPDF)}
-            size="lg"
-          >
+          <Button type="button" variant="secondary" icon={<BookmarkPlus size={16}/>}
+            loading={saving} onClick={handleSubmit(onSaveDraft)}>
+            Borrador
+          </Button>
+          <Button type="button" variant="gold" icon={<FileDown size={16}/>}
+            onClick={handleSubmit(onExportPDF)}>
             Exportar PDF
+          </Button>
+          <Button type="button" variant="secondary" icon={<Eye size={16}/>}
+            onClick={handleSubmit(onPreview)}>
+            Vista previa
+          </Button>
+          <Button type="button" variant="secondary" icon={<Share2 size={16}/>}
+            loading={sharing} onClick={handleSubmit(onShare)}>
+            Compartir
           </Button>
         </div>
       </form>
@@ -392,18 +314,13 @@ export function TrainingEditorPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <h3 className="font-bold text-gray-900">Enlace para compartir</h3>
             <p className="text-sm text-gray-600">
-              Cualquier persona con este enlace puede ver el entrenamiento y descargar el PDF, sin necesidad de iniciar sesión.
+              Cualquier persona con este enlace puede ver el entrenamiento y descargar el PDF, sin iniciar sesión.
             </p>
             <div className="flex gap-2">
-              <input
-                value={shareUrl}
-                readOnly
-                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 bg-gray-50"
-              />
-              <button
-                onClick={copyShareUrl}
-                className="flex items-center gap-1.5 bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
-              >
+              <input value={shareUrl} readOnly
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 bg-gray-50"/>
+              <button onClick={copyShareUrl}
+                className="flex items-center gap-1.5 bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors">
                 {copied ? <Check size={14}/> : <Copy size={14}/>}
                 {copied ? 'Copiado' : 'Copiar'}
               </button>
