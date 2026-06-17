@@ -1,564 +1,442 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import {
-  MousePointer, Minus, ArrowRight, Trash2, Download,
-  RotateCcw, Circle, Triangle, ZoomIn, ZoomOut,
-} from 'lucide-react'
+import { RotateCcw, Trash2, Download, X, MousePointer, Minus } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type ToolType =
   | 'select'
-  | 'player-own'    // jugador propio (rojo)
-  | 'player-rival'  // jugador rival (azul)
-  | 'goalkeeper'    // portero (amarillo)
-  | 'cone'          // cono (naranja)
-  | 'ball'          // pelota
-  | 'mannequin'     // muñeco
-  | 'arrow-dash'    // flecha punteada (pase/lanzamiento)
-  | 'arrow-solid'   // flecha lineal (trayectoria)
-  | 'arrow-curve'   // flecha curva libre
+  | 'player-own'
+  | 'player-rival'
+  | 'goalkeeper'
+  | 'cone'
+  | 'ball'
+  | 'mannequin'
+  | 'arrow-dash'
+  | 'arrow-solid'
+  | 'arrow-curve'
+  | 'line'
   | 'eraser'
 
-interface Point { x: number; y: number }
+interface Pt { x: number; y: number }
 
-interface BoardElement {
+interface Elem {
   id: string
   type: 'player-own' | 'player-rival' | 'goalkeeper' | 'cone' | 'ball' | 'mannequin'
-  x: number
-  y: number
+  x: number; y: number
   number?: number
-  label?: string
 }
 
-interface BoardArrow {
+interface Arrow {
   id: string
-  type: 'arrow-dash' | 'arrow-solid' | 'arrow-curve'
-  points: Point[]        // [start, ...control, end]
-  controlPoint?: Point   // para curva
+  type: 'arrow-dash' | 'arrow-solid' | 'arrow-curve' | 'line'
+  x1: number; y1: number
+  x2: number; y2: number
+  cx?: number; cy?: number  // control point para curva
 }
 
-interface BoardState {
-  elements: BoardElement[]
-  arrows: BoardArrow[]
-}
+interface State { elems: Elem[]; arrows: Arrow[] }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function uid() { return `${Date.now()}-${Math.random().toString(36).slice(2)}` }
+const W = 800
+const H = 500
 
-// Dimensiones de la cancha (proporciones reales handball)
-const COURT_W = 720
-const COURT_H = 480
+function uid() { return `${Date.now()}-${Math.random().toString(36).slice(2,6)}` }
 
-// ─── Componente principal ────────────────────────────────────────────────────
-interface Props {
-  onSave: (imageDataUrl: string) => void
+// ─── Componente ──────────────────────────────────────────────────────────────
+export function TacticalBoard({ onSave, onClose }: {
+  onSave: (url: string) => void
   onClose: () => void
-  initialImage?: string | null
-}
-
-export function TacticalBoard({ onSave, onClose, initialImage }: Props) {
-  const canvasRef   = useRef<HTMLCanvasElement>(null)
-  const overlayRef  = useRef<HTMLDivElement>(null)
-
-  const [tool, setTool]     = useState<ToolType>('select')
-  const [board, setBoard]   = useState<BoardState>({ elements: [], arrows: [] })
-  const [history, setHistory] = useState<BoardState[]>([{ elements: [], arrows: [] }])
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [tool, setTool] = useState<ToolType>('select')
+  const [state, setState] = useState<State>({ elems: [], arrows: [] })
+  const [history, setHistory] = useState<State[]>([{ elems: [], arrows: [] }])
   const [histIdx, setHistIdx] = useState(0)
+  const [counts, setCounts] = useState({ own: 1, rival: 1, gk: 1 })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Estado de drag
-  const dragging   = useRef<{ id: string; offX: number; offY: number } | null>(null)
-  const drawing    = useRef<{ points: Point[] } | null>(null)
-  const curveEdit  = useRef<{ id: string } | null>(null)
+  // Refs para interacción (sin re-render)
+  const mouseState = useRef<{
+    mode: 'idle' | 'dragging-elem' | 'drawing-arrow' | 'dragging-control'
+    elemId?: string
+    offX?: number; offY?: number
+    arrowStart?: Pt
+    previewEnd?: Pt
+  }>({ mode: 'idle' })
 
-  const [selected, setSelected] = useState<string | null>(null)
-  const [playerCount, setPlayerCount] = useState({ own: 1, rival: 1, gk: 1 })
+  // Dibujar siempre que cambia state o selectedId
+  useEffect(() => { draw(state) }, [state, selectedId])
 
-  // ─── Dibujar cancha ────────────────────────────────────────────────────────
-  useEffect(() => {
-    drawAll()
-  }, [board])
-
-  function drawAll() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')!
-    ctx.clearRect(0, 0, COURT_W, COURT_H)
-    drawCourt(ctx)
-    drawArrows(ctx)
-    drawElements(ctx)
-  }
-
-  function drawCourt(ctx: CanvasRenderingContext2D) {
-    // Fondo verde
-    ctx.fillStyle = '#2d7a2d'
-    ctx.fillRect(0, 0, COURT_W, COURT_H)
-
-    // Líneas blancas
-    ctx.strokeStyle = 'white'
-    ctx.lineWidth = 2
-
-    // Perímetro
-    ctx.strokeRect(20, 20, COURT_W - 40, COURT_H - 40)
-
-    // Línea central
-    ctx.beginPath()
-    ctx.moveTo(COURT_W / 2, 20)
-    ctx.lineTo(COURT_W / 2, COURT_H - 20)
-    ctx.stroke()
-
-    // Arco izquierdo (área de 6m)
-    ctx.beginPath()
-    ctx.arc(20, COURT_H / 2, 130, -Math.PI / 2.2, Math.PI / 2.2)
-    ctx.stroke()
-
-    // Arco derecho
-    ctx.beginPath()
-    ctx.arc(COURT_W - 20, COURT_H / 2, 130, Math.PI - Math.PI / 2.2, Math.PI + Math.PI / 2.2)
-    ctx.stroke()
-
-    // Línea de 9m izquierda (punteada)
-    ctx.setLineDash([8, 6])
-    ctx.beginPath()
-    ctx.arc(20, COURT_H / 2, 190, -Math.PI / 2.8, Math.PI / 2.8)
-    ctx.stroke()
-
-    // Línea de 9m derecha
-    ctx.beginPath()
-    ctx.arc(COURT_W - 20, COURT_H / 2, 190, Math.PI - Math.PI / 2.8, Math.PI + Math.PI / 2.8)
-    ctx.stroke()
-    ctx.setLineDash([])
-
-    // Porterías
-    const goalH = 70
-    const goalY = COURT_H / 2 - goalH / 2
-    ctx.lineWidth = 4
-    ctx.strokeStyle = 'white'
-    // Izquierda
-    ctx.strokeRect(0, goalY, 12, goalH)
-    // Derecha
-    ctx.strokeRect(COURT_W - 12, goalY, 12, goalH)
-    ctx.lineWidth = 2
-  }
-
-  function drawArrows(ctx: CanvasRenderingContext2D) {
-    board.arrows.forEach(arrow => {
-      if (arrow.points.length < 2) return
-      const start = arrow.points[0]
-      const end   = arrow.points[arrow.points.length - 1]
-
-      ctx.strokeStyle = '#fff700'
-      ctx.lineWidth = 2.5
-
-      if (arrow.type === 'arrow-dash') {
-        ctx.setLineDash([8, 5])
-      } else {
-        ctx.setLineDash([])
-      }
-
-      ctx.beginPath()
-      if (arrow.type === 'arrow-curve' && arrow.controlPoint) {
-        ctx.moveTo(start.x, start.y)
-        ctx.quadraticCurveTo(arrow.controlPoint.x, arrow.controlPoint.y, end.x, end.y)
-      } else {
-        ctx.moveTo(start.x, start.y)
-        ctx.lineTo(end.x, end.y)
-      }
-      ctx.stroke()
-      ctx.setLineDash([])
-
-      // Punta de flecha
-      drawArrowhead(ctx, start, end, arrow.controlPoint)
-    })
-  }
-
-  function drawArrowhead(
-    ctx: CanvasRenderingContext2D,
-    start: Point,
-    end: Point,
-    control?: Point
-  ) {
-    let angle: number
-    if (control) {
-      // Ángulo tangente al final de la curva cuadrática
-      angle = Math.atan2(end.y - control.y, end.x - control.x)
-    } else {
-      angle = Math.atan2(end.y - start.y, end.x - start.x)
-    }
-    const size = 12
-    ctx.fillStyle = '#fff700'
-    ctx.beginPath()
-    ctx.moveTo(end.x, end.y)
-    ctx.lineTo(
-      end.x - size * Math.cos(angle - Math.PI / 6),
-      end.y - size * Math.sin(angle - Math.PI / 6)
-    )
-    ctx.lineTo(
-      end.x - size * Math.cos(angle + Math.PI / 6),
-      end.y - size * Math.sin(angle + Math.PI / 6)
-    )
-    ctx.closePath()
-    ctx.fill()
-  }
-
-  function drawElements(ctx: CanvasRenderingContext2D) {
-    board.elements.forEach(el => {
-      const isSelected = el.id === selected
-      if (isSelected) {
-        ctx.shadowColor = 'white'
-        ctx.shadowBlur = 10
-      }
-
-      switch (el.type) {
-        case 'player-own':   drawPlayerCircle(ctx, el, '#e53935', el.number ?? 1); break
-        case 'player-rival': drawPlayerCircle(ctx, el, '#1565c0', el.number ?? 1); break
-        case 'goalkeeper':   drawPlayerCircle(ctx, el, '#f9a825', el.number ?? 1); break
-        case 'cone':         drawCone(ctx, el); break
-        case 'ball':         drawBall(ctx, el); break
-        case 'mannequin':    drawMannequin(ctx, el); break
-      }
-
-      ctx.shadowBlur = 0
-    })
-  }
-
-  function drawPlayerCircle(ctx: CanvasRenderingContext2D, el: BoardElement, color: string, num: number) {
-    ctx.fillStyle = color
-    ctx.beginPath()
-    ctx.arc(el.x, el.y, 18, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = 'white'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    ctx.fillStyle = 'white'
-    ctx.font = 'bold 13px Arial'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(String(num), el.x, el.y)
-  }
-
-  function drawCone(ctx: CanvasRenderingContext2D, el: BoardElement) {
-    ctx.fillStyle = '#ff6600'
-    ctx.beginPath()
-    ctx.moveTo(el.x, el.y - 14)
-    ctx.lineTo(el.x - 10, el.y + 10)
-    ctx.lineTo(el.x + 10, el.y + 10)
-    ctx.closePath()
-    ctx.fill()
-    ctx.strokeStyle = 'white'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-  }
-
-  function drawBall(ctx: CanvasRenderingContext2D, el: BoardElement) {
-    ctx.fillStyle = '#f5f5f5'
-    ctx.beginPath()
-    ctx.arc(el.x, el.y, 10, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#333'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-    // Líneas de la pelota
-    ctx.strokeStyle = '#555'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.arc(el.x, el.y, 10, 0, Math.PI * 2)
-    ctx.moveTo(el.x - 10, el.y)
-    ctx.lineTo(el.x + 10, el.y)
-    ctx.moveTo(el.x, el.y - 10)
-    ctx.lineTo(el.x, el.y + 10)
-    ctx.stroke()
-  }
-
-  function drawMannequin(ctx: CanvasRenderingContext2D, el: BoardElement) {
-    const x = el.x, y = el.y
-    ctx.strokeStyle = '#ff9800'
-    ctx.fillStyle = '#ff9800'
-    ctx.lineWidth = 2.5
-    // Cabeza
-    ctx.beginPath()
-    ctx.arc(x, y - 14, 6, 0, Math.PI * 2)
-    ctx.fill()
-    // Cuerpo
-    ctx.beginPath()
-    ctx.moveTo(x, y - 8)
-    ctx.lineTo(x, y + 8)
-    ctx.stroke()
-    // Brazos
-    ctx.beginPath()
-    ctx.moveTo(x - 10, y - 2)
-    ctx.lineTo(x + 10, y - 2)
-    ctx.stroke()
-    // Piernas
-    ctx.beginPath()
-    ctx.moveTo(x, y + 8)
-    ctx.lineTo(x - 8, y + 20)
-    ctx.moveTo(x, y + 8)
-    ctx.lineTo(x + 8, y + 20)
-    ctx.stroke()
-  }
-
-  // ─── Interacción con el canvas ────────────────────────────────────────────
-  function getPos(e: React.MouseEvent<HTMLCanvasElement>): Point {
-    const rect = canvasRef.current!.getBoundingClientRect()
-    const scaleX = COURT_W / rect.width
-    const scaleY = COURT_H / rect.height
+  function getPos(e: React.MouseEvent<HTMLCanvasElement>): Pt {
+    const r = canvasRef.current!.getBoundingClientRect()
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top)  * scaleY,
+      x: (e.clientX - r.left) * (W / r.width),
+      y: (e.clientY - r.top)  * (H / r.height),
     }
   }
 
-  function findElement(pos: Point): BoardElement | null {
-    return board.elements.slice().reverse().find(el => {
-      const dx = el.x - pos.x
-      const dy = el.y - pos.y
-      return Math.sqrt(dx*dx + dy*dy) < 22
+  function findElem(p: Pt, s: State): Elem | null {
+    return [...s.elems].reverse().find(el => {
+      const d = Math.hypot(el.x - p.x, el.y - p.y)
+      return d < 24
     }) ?? null
   }
 
-  function pushHistory(newBoard: BoardState) {
-    const newHistory = history.slice(0, histIdx + 1)
-    newHistory.push(newBoard)
-    setHistory(newHistory)
-    setHistIdx(newHistory.length - 1)
+  // ─── Dibujo ────────────────────────────────────────────────────────────────
+  function draw(s: State, preview?: { type: ToolType; x1:number;y1:number;x2:number;y2:number }) {
+    const cv = canvasRef.current; if (!cv) return
+    const ctx = cv.getContext('2d')!
+    ctx.clearRect(0, 0, W, H)
+    drawCourt(ctx)
+    s.arrows.forEach(a => drawArrow(ctx, a))
+    if (preview) drawPreviewArrow(ctx, preview)
+    s.elems.forEach(el => drawElem(ctx, el, el.id === selectedId))
   }
 
-  function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
-    const pos = getPos(e)
+  function drawCourt(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = '#2d7a2d'
+    ctx.fillRect(0, 0, W, H)
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+    ctx.lineWidth = 2
 
-    if (tool === 'select') {
-      const el = findElement(pos)
-      if (el) {
-        setSelected(el.id)
-        dragging.current = { id: el.id, offX: pos.x - el.x, offY: pos.y - el.y }
-      } else {
-        setSelected(null)
-      }
-      return
+    // Borde
+    ctx.strokeRect(16, 16, W-32, H-32)
+    // Línea central
+    ctx.beginPath(); ctx.moveTo(W/2, 16); ctx.lineTo(W/2, H-16); ctx.stroke()
+
+    // Área 6m
+    const gY = H/2
+    ctx.beginPath(); ctx.arc(16, gY, 150, -1.2, 1.2); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-16, gY, 150, Math.PI-1.2, Math.PI+1.2); ctx.stroke()
+
+    // Línea 9m punteada
+    ctx.setLineDash([8,6])
+    ctx.beginPath(); ctx.arc(16, gY, 210, -1.0, 1.0); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-16, gY, 210, Math.PI-1.0, Math.PI+1.0); ctx.stroke()
+    ctx.setLineDash([])
+
+    // Porterías
+    const gH = 80, gTop = gY - gH/2
+    ctx.lineWidth = 4
+    ctx.strokeRect(0, gTop, 14, gH)
+    ctx.strokeRect(W-14, gTop, 14, gH)
+    ctx.lineWidth = 2
+  }
+
+  function drawArrow(ctx: CanvasRenderingContext2D, a: Arrow) {
+    ctx.save()
+    ctx.strokeStyle = '#ffe600'
+    ctx.fillStyle   = '#ffe600'
+    ctx.lineWidth   = 2.5
+
+    if (a.type === 'arrow-dash') ctx.setLineDash([9,6])
+    else ctx.setLineDash([])
+
+    ctx.beginPath()
+    if (a.type === 'arrow-curve' && a.cx !== undefined && a.cy !== undefined) {
+      ctx.moveTo(a.x1, a.y1)
+      ctx.quadraticCurveTo(a.cx, a.cy, a.x2, a.y2)
+    } else {
+      ctx.moveTo(a.x1, a.y1)
+      ctx.lineTo(a.x2, a.y2)
     }
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // Punta (solo para flechas, no para línea separadora)
+    if (a.type !== 'line') {
+      let angle: number
+      if (a.type === 'arrow-curve' && a.cx !== undefined && a.cy !== undefined) {
+        angle = Math.atan2(a.y2 - a.cy, a.x2 - a.cx)
+      } else {
+        angle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1)
+      }
+      const sz = 13
+      ctx.beginPath()
+      ctx.moveTo(a.x2, a.y2)
+      ctx.lineTo(a.x2 - sz*Math.cos(angle-0.5), a.y2 - sz*Math.sin(angle-0.5))
+      ctx.lineTo(a.x2 - sz*Math.cos(angle+0.5), a.y2 - sz*Math.sin(angle+0.5))
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  function drawPreviewArrow(ctx: CanvasRenderingContext2D, p: { type: ToolType; x1:number;y1:number;x2:number;y2:number }) {
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,230,0,0.5)'
+    ctx.lineWidth = 2
+    if (p.type === 'arrow-dash') ctx.setLineDash([9,6])
+    ctx.beginPath(); ctx.moveTo(p.x1,p.y1); ctx.lineTo(p.x2,p.y2); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+  }
+
+  function drawElem(ctx: CanvasRenderingContext2D, el: Elem, sel: boolean) {
+    if (sel) { ctx.shadowColor='white'; ctx.shadowBlur=12 }
+
+    switch (el.type) {
+      case 'player-own':   drawCircle(ctx, el, '#d32f2f'); break
+      case 'player-rival': drawCircle(ctx, el, '#1565c0'); break
+      case 'goalkeeper':   drawCircle(ctx, el, '#f9a825'); break
+      case 'cone':         drawCone(ctx, el); break
+      case 'ball':         drawBall(ctx, el); break
+      case 'mannequin':    drawMannequin(ctx, el); break
+    }
+    ctx.shadowBlur = 0
+  }
+
+  function drawCircle(ctx: CanvasRenderingContext2D, el: Elem, color: string) {
+    ctx.fillStyle = color
+    ctx.beginPath(); ctx.arc(el.x, el.y, 19, 0, Math.PI*2); ctx.fill()
+    ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke()
+    ctx.fillStyle='white'; ctx.font='bold 13px Arial'
+    ctx.textAlign='center'; ctx.textBaseline='middle'
+    ctx.fillText(String(el.number??''), el.x, el.y)
+  }
+
+  function drawCone(ctx: CanvasRenderingContext2D, el: Elem) {
+    ctx.fillStyle='#ff6600'
+    ctx.beginPath()
+    ctx.moveTo(el.x, el.y-15)
+    ctx.lineTo(el.x-11, el.y+10)
+    ctx.lineTo(el.x+11, el.y+10)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke()
+  }
+
+  function drawBall(ctx: CanvasRenderingContext2D, el: Elem) {
+    ctx.fillStyle='#f5f5f5'
+    ctx.beginPath(); ctx.arc(el.x,el.y,11,0,Math.PI*2); ctx.fill()
+    ctx.strokeStyle='#444'; ctx.lineWidth=1.5; ctx.stroke()
+    ctx.strokeStyle='#999'; ctx.lineWidth=1
+    ctx.beginPath(); ctx.moveTo(el.x-11,el.y); ctx.lineTo(el.x+11,el.y)
+    ctx.moveTo(el.x,el.y-11); ctx.lineTo(el.x,el.y+11); ctx.stroke()
+  }
+
+  function drawMannequin(ctx: CanvasRenderingContext2D, el: Elem) {
+    const {x,y} = el
+    ctx.strokeStyle='#ff9800'; ctx.fillStyle='#ff9800'; ctx.lineWidth=2.5
+    ctx.beginPath(); ctx.arc(x,y-16,7,0,Math.PI*2); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(x,y-9); ctx.lineTo(x,y+9); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(x-11,y-1); ctx.lineTo(x+11,y-1); ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x,y+9); ctx.lineTo(x-9,y+22)
+    ctx.moveTo(x,y+9); ctx.lineTo(x+9,y+22)
+    ctx.stroke()
+  }
+
+  // ─── Eventos mouse ────────────────────────────────────────────────────────
+  function onMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    const p = getPos(e)
+    const ms = mouseState.current
 
     if (tool === 'eraser') {
-      const el = findElement(pos)
+      const el = findElem(p, state)
       if (el) {
-        const nb = { ...board, elements: board.elements.filter(e => e.id !== el.id) }
-        setBoard(nb); pushHistory(nb)
+        const ns = { ...state, elems: state.elems.filter(x => x.id !== el.id) }
+        commit(ns)
       } else {
-        // borrar flecha cercana (simplificado: borra la última)
-        const nb = { ...board, arrows: board.arrows.slice(0, -1) }
-        setBoard(nb); pushHistory(nb)
+        // Borrar flecha más cercana al punto
+        let minD = 30, target: string | null = null
+        state.arrows.forEach(a => {
+          const mx = (a.x1+a.x2)/2, my = (a.y1+a.y2)/2
+          const d = Math.hypot(mx-p.x, my-p.y)
+          if (d < minD) { minD=d; target=a.id }
+        })
+        if (target) commit({ ...state, arrows: state.arrows.filter(a => a.id !== target) })
       }
       return
     }
 
-    if (['arrow-dash', 'arrow-solid', 'arrow-curve'].includes(tool)) {
-      drawing.current = { points: [pos] }
+    if (tool === 'select') {
+      const el = findElem(p, state)
+      if (el) {
+        setSelectedId(el.id)
+        ms.mode = 'dragging-elem'
+        ms.elemId = el.id
+        ms.offX = p.x - el.x
+        ms.offY = p.y - el.y
+      } else {
+        setSelectedId(null)
+      }
+      return
+    }
+
+    if (['arrow-dash','arrow-solid','arrow-curve','line'].includes(tool)) {
+      ms.mode = 'drawing-arrow'
+      ms.arrowStart = p
       return
     }
 
     // Colocar elemento
-    if (['player-own','player-rival','goalkeeper','cone','ball','mannequin'].includes(tool)) {
-      let num: number | undefined
-      let newCounts = { ...playerCount }
-      if (tool === 'player-own')   { num = playerCount.own;   newCounts.own++  }
-      if (tool === 'player-rival') { num = playerCount.rival; newCounts.rival++ }
-      if (tool === 'goalkeeper')   { num = playerCount.gk;    newCounts.gk++   }
-      setPlayerCount(newCounts)
+    const type = tool as Elem['type']
+    let number: number | undefined
+    const nc = { ...counts }
+    if (tool==='player-own')   { number=nc.own++;   setCounts({...nc}) }
+    if (tool==='player-rival') { number=nc.rival++;  setCounts({...nc}) }
+    if (tool==='goalkeeper')   { number=nc.gk++;     setCounts({...nc}) }
 
-      const el: BoardElement = {
-        id: uid(),
-        type: tool as BoardElement['type'],
-        x: pos.x,
-        y: pos.y,
-        number: num,
-      }
-      const nb = { ...board, elements: [...board.elements, el] }
-      setBoard(nb); pushHistory(nb)
-    }
+    const el: Elem = { id: uid(), type, x: p.x, y: p.y, number }
+    commit({ ...state, elems: [...state.elems, el] })
   }
 
-  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    const pos = getPos(e)
+  function onMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    const p = getPos(e)
+    const ms = mouseState.current
 
-    if (dragging.current) {
-      const nb = {
-        ...board,
-        elements: board.elements.map(el =>
-          el.id === dragging.current!.id
-            ? { ...el, x: pos.x - dragging.current!.offX, y: pos.y - dragging.current!.offY }
+    if (ms.mode === 'dragging-elem' && ms.elemId) {
+      const ns = {
+        ...state,
+        elems: state.elems.map(el =>
+          el.id === ms.elemId
+            ? { ...el, x: p.x - (ms.offX??0), y: p.y - (ms.offY??0) }
             : el
         )
       }
-      setBoard(nb)
+      // No commitear en cada frame, solo actualizar visual
+      setState(ns)
       return
     }
 
-    if (drawing.current) {
-      // Preview en tiempo real
-      const tempBoard = {
-        ...board,
-        arrows: [
-          ...board.arrows,
-          {
-            id: 'preview',
-            type: tool as BoardArrow['type'],
-            points: [drawing.current.points[0], pos],
-            controlPoint: tool === 'arrow-curve'
-              ? { x: (drawing.current.points[0].x + pos.x) / 2, y: Math.min(drawing.current.points[0].y, pos.y) - 50 }
-              : undefined,
-          }
-        ]
-      }
-      const canvas = canvasRef.current!
-      const ctx = canvas.getContext('2d')!
-      ctx.clearRect(0, 0, COURT_W, COURT_H)
-      drawCourt(ctx)
-      // Dibujar flechas existentes
-      const prevBoard = board
-      setBoard(tempBoard)
-      setTimeout(() => {
-        drawAll()
-        setBoard(prevBoard)
-      }, 0)
+    if (ms.mode === 'drawing-arrow' && ms.arrowStart) {
+      draw(state, { type: tool, x1: ms.arrowStart.x, y1: ms.arrowStart.y, x2: p.x, y2: p.y })
     }
   }
 
-  function handleMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
-    const pos = getPos(e)
+  function onMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
+    const p = getPos(e)
+    const ms = mouseState.current
 
-    if (dragging.current) {
-      dragging.current = null
-      pushHistory(board)
+    if (ms.mode === 'dragging-elem') {
+      ms.mode = 'idle'
+      commit(state) // guardar posición final en historial
       return
     }
 
-    if (drawing.current) {
-      const start = drawing.current.points[0]
-      const dist = Math.sqrt((pos.x-start.x)**2 + (pos.y-start.y)**2)
-      if (dist > 15) {
-        const arrow: BoardArrow = {
+    if (ms.mode === 'drawing-arrow' && ms.arrowStart) {
+      const dx = p.x - ms.arrowStart.x
+      const dy = p.y - ms.arrowStart.y
+      if (Math.hypot(dx,dy) > 20) {
+        const arrow: Arrow = {
           id: uid(),
-          type: tool as BoardArrow['type'],
-          points: [start, pos],
-          controlPoint: tool === 'arrow-curve'
-            ? { x: (start.x + pos.x) / 2, y: Math.min(start.y, pos.y) - 60 }
-            : undefined,
+          type: tool as Arrow['type'],
+          x1: ms.arrowStart.x, y1: ms.arrowStart.y,
+          x2: p.x, y2: p.y,
+          cx: tool==='arrow-curve' ? (ms.arrowStart.x+p.x)/2 : undefined,
+          cy: tool==='arrow-curve' ? Math.min(ms.arrowStart.y,p.y)-70 : undefined,
         }
-        const nb = { ...board, arrows: [...board.arrows, arrow] }
-        setBoard(nb); pushHistory(nb)
+        commit({ ...state, arrows: [...state.arrows, arrow] })
       }
-      drawing.current = null
+      ms.mode = 'idle'
+      ms.arrowStart = undefined
     }
   }
 
-  function handleUndo() {
+  function commit(ns: State) {
+    const nh = history.slice(0, histIdx+1)
+    nh.push(ns)
+    setHistory(nh)
+    setHistIdx(nh.length-1)
+    setState(ns)
+  }
+
+  function undo() {
     if (histIdx > 0) {
-      setHistIdx(histIdx - 1)
-      setBoard(history[histIdx - 1])
+      setHistIdx(histIdx-1)
+      setState(history[histIdx-1])
     }
   }
 
-  function handleClear() {
-    const nb = { elements: [], arrows: [] }
-    setBoard(nb); pushHistory(nb)
-    setPlayerCount({ own: 1, rival: 1, gk: 1 })
+  function clear() {
+    const ns = { elems:[], arrows:[] }
+    commit(ns)
+    setCounts({ own:1, rival:1, gk:1 })
+    setSelectedId(null)
   }
 
-  function handleSave() {
-    const canvas = canvasRef.current!
-    const dataUrl = canvas.toDataURL('image/png')
-    onSave(dataUrl)
+  function save() {
+    const cv = canvasRef.current!
+    onSave(cv.toDataURL('image/png'))
   }
 
-  // ─── Herramientas ─────────────────────────────────────────────────────────
-  const tools: { id: ToolType; label: string; icon: React.ReactNode; color?: string }[] = [
-    { id: 'select',       label: 'Seleccionar',   icon: <MousePointer size={16}/> },
-    { id: 'player-own',   label: 'Jugador propio', icon: <span className="w-4 h-4 rounded-full bg-red-600 border-2 border-white inline-block"/> },
-    { id: 'player-rival', label: 'Jugador rival',  icon: <span className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white inline-block"/> },
-    { id: 'goalkeeper',   label: 'Portero',        icon: <span className="w-4 h-4 rounded-full bg-yellow-400 border-2 border-white inline-block"/> },
-    { id: 'mannequin',    label: 'Muñeco',         icon: <span className="text-orange-400 font-bold text-xs">M</span> },
-    { id: 'cone',         label: 'Cono',           icon: <Triangle size={14} className="text-orange-500"/> },
-    { id: 'ball',         label: 'Pelota',         icon: <Circle size={14} className="text-gray-300"/> },
-    { id: 'arrow-dash',   label: 'Pase/Lanzamiento', icon: <span className="text-yellow-400 text-xs font-bold">- -▶</span> },
-    { id: 'arrow-solid',  label: 'Trayectoria',    icon: <span className="text-yellow-400 text-xs font-bold">——▶</span> },
-    { id: 'arrow-curve',  label: 'Curva libre',    icon: <span className="text-yellow-400 text-xs font-bold">∿▶</span> },
-    { id: 'eraser',       label: 'Borrar',         icon: <Trash2 size={14}/> },
+  // ─── UI ──────────────────────────────────────────────────────────────────
+  const TOOLS: { id: ToolType; label: string; el: React.ReactNode }[] = [
+    { id:'select',       label:'Mover',             el:<MousePointer size={15}/> },
+    { id:'player-own',   label:'Jugador propio',    el:<span className="w-4 h-4 rounded-full bg-red-600 border border-white inline-block"/> },
+    { id:'player-rival', label:'Jugador rival',     el:<span className="w-4 h-4 rounded-full bg-blue-600 border border-white inline-block"/> },
+    { id:'goalkeeper',   label:'Portero',           el:<span className="w-4 h-4 rounded-full bg-yellow-400 border border-white inline-block"/> },
+    { id:'mannequin',    label:'Muñeco',            el:<span className="font-bold text-orange-400 text-xs leading-none">🚶</span> },
+    { id:'cone',         label:'Cono',              el:<span className="text-orange-500 text-xs font-bold">▲</span> },
+    { id:'ball',         label:'Pelota',            el:<span className="text-gray-200 text-xs font-bold">●</span> },
+    { id:'arrow-solid',  label:'Trayectoria ——▶',  el:<span className="text-yellow-400 text-xs font-bold">——▶</span> },
+    { id:'arrow-dash',   label:'Pase/Lanz. - -▶',  el:<span className="text-yellow-400 text-xs font-bold">- -▶</span> },
+    { id:'arrow-curve',  label:'Curva libre ∿▶',   el:<span className="text-yellow-400 text-xs font-bold">∿▶</span> },
+    { id:'line',         label:'Línea separadora',  el:<Minus size={15} className="text-white/70"/> },
+    { id:'eraser',       label:'Borrar',            el:<Trash2 size={15}/> },
   ]
 
-  const cursor = tool === 'select' ? 'cursor-default'
-    : tool === 'eraser' ? 'cursor-crosshair'
-    : ['arrow-dash','arrow-solid','arrow-curve'].includes(tool) ? 'cursor-crosshair'
-    : 'cursor-copy'
+  const cursor = tool==='select' ? 'default'
+    : ['arrow-dash','arrow-solid','arrow-curve','line'].includes(tool) ? 'crosshair'
+    : tool==='eraser' ? 'crosshair' : 'copy'
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-2xl shadow-2xl flex flex-col" style={{ maxWidth: 900, width: '100%' }}>
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3">
+      <div className="bg-gray-900 rounded-2xl shadow-2xl flex flex-col w-full" style={{ maxWidth: 1000 }}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <h2 className="text-white font-bold text-sm">🏐 Pizarra táctica</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={handleUndo}
-              disabled={histIdx === 0}
-              className="text-white/60 hover:text-white disabled:opacity-30 p-1.5 rounded-lg hover:bg-white/10"
-              title="Deshacer"
-            >
+          <div className="flex gap-2 items-center">
+            <button onClick={undo} disabled={histIdx===0}
+              className="text-white/50 hover:text-white disabled:opacity-20 p-1.5 rounded-lg hover:bg-white/10" title="Deshacer">
               <RotateCcw size={16}/>
             </button>
-            <button
-              onClick={handleClear}
-              className="text-white/60 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10"
-              title="Limpiar todo"
-            >
+            <button onClick={clear}
+              className="text-white/50 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10" title="Limpiar todo">
               <Trash2 size={16}/>
             </button>
-            <button
-              onClick={handleSave}
-              className="bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"
-            >
-              <Download size={14}/> Guardar imagen
+            <button onClick={save}
+              className="bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+              <Download size={14}/> Guardar
             </button>
-            <button
-              onClick={onClose}
-              className="text-white/60 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-white/10"
-            >
-              Cerrar
+            <button onClick={onClose}
+              className="text-white/50 hover:text-white p-1.5 rounded-lg hover:bg-white/10">
+              <X size={18}/>
             </button>
           </div>
         </div>
 
-        <div className="flex gap-0">
-          {/* Barra de herramientas */}
-          <div className="flex flex-col gap-1 p-2 border-r border-white/10 min-w-32">
-            {tools.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTool(t.id)}
+        <div className="flex">
+          {/* Herramientas */}
+          <div className="flex flex-col gap-1 p-2 border-r border-white/10 w-40 flex-shrink-0">
+            {TOOLS.map(t => (
+              <button key={t.id} onClick={() => setTool(t.id)}
                 className={clsx(
-                  'flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-colors text-left',
-                  tool === t.id
-                    ? 'bg-dj-600 text-white'
-                    : 'text-white/60 hover:text-white hover:bg-white/10'
-                )}
-              >
-                <span className="flex-shrink-0 flex items-center justify-center w-5">{t.icon}</span>
+                  'flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-all text-left',
+                  tool===t.id ? 'bg-dj-600 text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/10'
+                )}>
+                <span className="w-5 flex items-center justify-center flex-shrink-0">{t.el}</span>
                 <span className="leading-tight">{t.label}</span>
               </button>
             ))}
           </div>
 
           {/* Canvas */}
-          <div className="flex-1 p-3">
+          <div className="flex-1 p-3 flex items-center justify-center">
             <canvas
               ref={canvasRef}
-              width={COURT_W}
-              height={COURT_H}
-              className={clsx('rounded-xl w-full', cursor)}
-              style={{ maxHeight: 420 }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
+              width={W} height={H}
+              className="rounded-xl w-full"
+              style={{ cursor, maxHeight: '70vh', objectFit: 'contain' }}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onMouseLeave={onMouseUp}
             />
           </div>
+        </div>
+
+        <div className="px-4 py-2 border-t border-white/10 text-xs text-white/30 text-center">
+          Hacé clic para colocar elementos · Arrastrá para dibujar flechas · Modo seleccionar para mover
         </div>
       </div>
     </div>
