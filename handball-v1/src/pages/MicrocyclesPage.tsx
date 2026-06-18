@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Plus, X, Save, FileDown, Share2,
   ChevronDown, ChevronUp, Copy, Check, Calendar,
@@ -504,7 +505,17 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
   onRemove: () => void
 }) {
   const [showCatPicker, setShowCatPicker] = useState(false)
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-dj-100 text-dj-900'
+
+  function openPicker() {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (rect) {
+      setPickerPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX })
+    }
+    setShowCatPicker(true)
+  }
 
   return (
     <div className={clsx('rounded-xl px-2.5 py-2 group relative', colorClass)}>
@@ -526,30 +537,39 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
       </div>
 
       <button
-        onClick={() => setShowCatPicker(!showCatPicker)}
+        ref={triggerRef}
+        onClick={() => (showCatPicker ? setShowCatPicker(false) : openPicker())}
         className="text-[9px] font-bold mt-1 underline opacity-80 hover:opacity-100"
       >
         {moment.category ? CONTENT_SHORT[moment.category] : 'Elegir categoría'}
       </button>
 
-      {showCatPicker && (
-        <div className="absolute z-10 top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 p-1.5 w-44">
-          {CONTENT_CATEGORIES.map(c => (
-            <button
-              key={c}
-              onClick={() => { onCategory(c); setShowCatPicker(false) }}
-              className={clsx('w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5', CONTENT_COLOR[c])}
-            >
-              {CONTENT_SHORT[c]}
-            </button>
-          ))}
-          <button
-            onClick={() => { onCategory(null); setShowCatPicker(false) }}
-            className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
+      {showCatPicker && pickerPos && createPortal(
+        <>
+          {/* Overlay invisible para cerrar el menú al hacer click afuera */}
+          <div className="fixed inset-0 z-[90]" onClick={() => setShowCatPicker(false)}/>
+          <div
+            className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-44"
+            style={{ top: pickerPos.top, left: pickerPos.left }}
           >
-            Sin categoría
-          </button>
-        </div>
+            {CONTENT_CATEGORIES.map(c => (
+              <button
+                key={c}
+                onClick={() => { onCategory(c); setShowCatPicker(false) }}
+                className={clsx('w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5', CONTENT_COLOR[c])}
+              >
+                {CONTENT_SHORT[c]}
+              </button>
+            ))}
+            <button
+              onClick={() => { onCategory(null); setShowCatPicker(false) }}
+              className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
+            >
+              Sin categoría
+            </button>
+          </div>
+        </>,
+        document.body,
       )}
     </div>
   )
