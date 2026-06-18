@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Plus, X, Save, FileDown, Share2,
-  ChevronDown, ChevronUp, Copy, Check, Calendar,
+  ChevronDown, ChevronUp, Copy, Check, Calendar, ImagePlus, Trash2,
 } from 'lucide-react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -17,7 +17,7 @@ import {
   listDaysInMonth, listAllDays, listDaysInWeek,
   upsertMicrocycleDay, computeContentStats, getWeeksInMonth,
   addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory,
-  getOrCreateShareLink, buildShareUrl,
+  getOrCreateShareLink, buildShareUrl, uploadDayImage,
 } from '@/lib/cycles'
 import { downloadMicrocyclePDF } from '@/lib/pdfMicrocycle'
 import type {
@@ -57,7 +57,6 @@ export function MicrocyclesPage() {
   const [macro, setMacro] = useState<Macrocycle | null>(null)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
-
   const [activeWeekStart, setActiveWeekStart] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -96,7 +95,7 @@ export function MicrocyclesPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// VISTA MACROCICLO — objetivos, observaciones, radar, calendario de meses
+// VISTA MACROCICLO
 // ════════════════════════════════════════════════════════════════════════════
 function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   macro: Macrocycle
@@ -108,7 +107,6 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   const [annualObjective, setAnnualObjective] = useState(macro.annual_objective ?? '')
   const [annualObservations, setAnnualObservations] = useState(macro.annual_observations ?? '')
   const [saving, setSaving] = useState(false)
-
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [monthDays, setMonthDays] = useState<MicrocycleDay[]>([])
   const [allDays, setAllDays] = useState<MicrocycleDay[]>([])
@@ -128,13 +126,12 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   const stats = useMemo(() => computeContentStats(allDays), [allDays])
   const radarData = CONTENT_CATEGORIES.map(c => ({ category: CONTENT_SHORT[c], value: stats[c] }))
   const hasAnyStats = Object.values(stats).some(v => v > 0)
-
   const weeks = useMemo(() => getWeeksInMonth(currentMonth), [currentMonth])
 
   function weekHasContent(weekStart: Date, weekEnd: Date) {
     return monthDays.some(d => {
       const date = new Date(d.date + 'T12:00:00')
-      return date >= weekStart && date <= weekEnd && (d.day_label || d.moments.length > 0)
+      return date >= weekStart && date <= weekEnd && (d.labels.length > 0 || d.moments.length > 0)
     })
   }
 
@@ -157,11 +154,12 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   return (
     <div className="space-y-4">
       <div>
+        <p className="text-dj-600 text-xs font-bold uppercase tracking-wide mb-0.5">Macrociclo</p>
         <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
         <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
       </div>
 
-      {/* ── Objetivos y Observaciones anuales ── */}
+      {/* Objetivos y Observaciones */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
@@ -179,7 +177,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
                   value={annualObjective}
                   onChange={e => setAnnualObjective(e.target.value)}
                   rows={4}
-                  placeholder="Ej: Consolidar la base técnica individual y mejorar el rendimiento defensivo de cara al torneo provincial..."
+                  placeholder="Ej: Consolidar la base técnica individual..."
                   className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
                 />
               </div>
@@ -201,12 +199,12 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
         )}
       </div>
 
-      {/* ── Gráfico de radar: contenidos más trabajados ── */}
+      {/* Gráfico de radar */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <h3 className="font-semibold text-gray-800 text-sm mb-2">Contenidos más trabajados durante el año</h3>
         {!hasAnyStats ? (
           <p className="text-gray-400 text-sm text-center py-8">
-            Todavía no hay contenidos categorizados en los microciclos. A medida que vayas completando semanas, este gráfico se va a llenar solo.
+            Todavía no hay contenidos categorizados. A medida que completes semanas, este gráfico se llena solo.
           </p>
         ) : (
           <div className="h-72">
@@ -222,7 +220,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
         )}
       </div>
 
-      {/* ── Calendario de meses (Mesociclo) con semanas (Microciclo) ── */}
+      {/* Calendario de meses con semanas */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-gray-800 text-sm">Mesociclo (mes) y sus microciclos (semanas)</h3>
@@ -238,7 +236,6 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
             </button>
           </div>
         </div>
-
         {loadingMonth ? (
           <p className="text-sm text-gray-400 py-4">Cargando...</p>
         ) : (
@@ -251,9 +248,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
                   onClick={() => onOpenWeek(week.weekStart)}
                   className={clsx(
                     'w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left',
-                    hasContent
-                      ? 'border-dj-300 bg-dj-50 hover:border-dj-500'
-                      : 'border-gray-100 bg-gray-50 hover:border-gray-300',
+                    hasContent ? 'border-dj-300 bg-dj-50 hover:border-dj-500' : 'border-gray-100 bg-gray-50 hover:border-gray-300',
                   )}
                 >
                   <div className="flex items-center gap-2.5">
@@ -277,7 +272,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// EDITOR DEL MICROCICLO (semana puntual, Lun-Dom)
+// EDITOR DEL MICROCICLO
 // ════════════════════════════════════════════════════════════════════════════
 function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   macro: Macrocycle
@@ -317,13 +312,24 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   function getDay(dateKey: string): MicrocycleDay {
     return days[dateKey] ?? {
       id: '', macrocycle_id: macro.id, date: dateKey,
-      day_label: null, rival_logo_url: null, moments: [],
+      labels: [], rival_logo_url: null, moments: [],
       created_at: '', updated_at: '',
     }
   }
 
   function patchDay(dateKey: string, patch: Partial<MicrocycleDay>) {
     setDays(prev => ({ ...prev, [dateKey]: { ...getDay(dateKey), ...patch } }))
+  }
+
+  function handleAddLabel(dateKey: string, label: string) {
+    const day = getDay(dateKey)
+    if (!label.trim()) return
+    patchDay(dateKey, { labels: [...day.labels, label.trim()] })
+  }
+
+  function handleRemoveLabel(dateKey: string, idx: number) {
+    const day = getDay(dateKey)
+    patchDay(dateKey, { labels: day.labels.filter((_, i) => i !== idx) })
   }
 
   function handleAddMoment(dateKey: string) {
@@ -346,16 +352,30 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
     patchDay(dateKey, { moments: updateMomentCategory(day.moments, momentId, category) })
   }
 
+  async function handleImageUpload(dateKey: string, file: File) {
+    try {
+      const url = await uploadDayImage(file, macro.id, dateKey)
+      patchDay(dateKey, { rival_logo_url: url })
+      onToast({ msg: 'Imagen subida.', type: 'success' })
+    } catch {
+      onToast({ msg: 'Error al subir la imagen.', type: 'error' })
+    }
+  }
+
+  function handleImageRemove(dateKey: string) {
+    patchDay(dateKey, { rival_logo_url: null })
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
       const promises = Object.entries(days).map(([dateKey, day]) => {
         if (!day) return Promise.resolve()
-        if (!day.day_label && day.moments.length === 0) return Promise.resolve()
+        if (day.labels.length === 0 && day.moments.length === 0 && !day.rival_logo_url) return Promise.resolve()
         return upsertMicrocycleDay({
           macrocycle_id: macro.id,
           date: dateKey,
-          day_label: day.day_label,
+          labels: day.labels,
           rival_logo_url: day.rival_logo_url,
           moments: day.moments,
         })
@@ -406,9 +426,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
       </div>
 
       <div className="bg-dj-800 rounded-2xl px-5 py-3">
-        <h2 className="text-white font-bold font-display text-lg">
-          Microciclo semanal
-        </h2>
+        <h2 className="text-white font-bold font-display text-lg">Microciclo semanal</h2>
         <p className="text-white/60 text-xs mt-0.5">
           {format(weekStart, "d 'de' MMMM", { locale: es })} – {format(weekEnd, "d 'de' MMMM yyyy", { locale: es })}
         </p>
@@ -424,11 +442,14 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
               label={WEEK_LABELS[i]}
               date={date}
               day={day}
-              onLabelChange={v => patchDay(key, { day_label: v })}
+              onAddLabel={label => handleAddLabel(key, label)}
+              onRemoveLabel={idx => handleRemoveLabel(key, idx)}
               onAddMoment={() => handleAddMoment(key)}
               onRemoveMoment={id => handleRemoveMoment(key, id)}
               onMomentChange={(id, v) => handleMomentChange(key, id, v)}
               onMomentCategory={(id, c) => handleMomentCategory(key, id, c)}
+              onImageUpload={file => handleImageUpload(key, file)}
+              onImageRemove={() => handleImageRemove(key)}
             />
           )
         })}
@@ -446,57 +467,128 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   )
 }
 
-function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory }: {
+// ════════════════════════════════════════════════════════════════════════════
+// COLUMNA DEL DÍA
+// ════════════════════════════════════════════════════════════════════════════
+function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory, onImageUpload, onImageRemove }: {
   label: string
   date: Date
   day: MicrocycleDay
-  onLabelChange: (v: string) => void
+  onAddLabel: (v: string) => void
+  onRemoveLabel: (idx: number) => void
   onAddMoment: () => void
   onRemoveMoment: (id: string) => void
   onMomentChange: (id: string, v: string) => void
   onMomentCategory: (id: string, c: ContentCategory | null) => void
+  onImageUpload: (file: File) => void
+  onImageRemove: () => void
 }) {
+  const [newLabel, setNewLabel] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
   const sortedMoments = [...day.moments].sort((a, b) => a.order - b.order)
+
+  function handleLabelKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && newLabel.trim()) {
+      onAddLabel(newLabel)
+      setNewLabel('')
+    }
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      {/* Header del día */}
       <div className="bg-dj-700 text-center py-2">
         <p className="text-yellow-300 text-xs font-bold uppercase tracking-wide">{label}</p>
         <p className="text-white text-sm font-bold">{format(date, 'd/MM')}</p>
       </div>
 
-      <div className="p-2">
+      <div className="p-2 flex-1 flex flex-col gap-2">
+        {/* Imagen del día */}
+        {day.rival_logo_url ? (
+          <div className="relative group">
+            <img
+              src={day.rival_logo_url}
+              alt="Imagen del día"
+              className="w-full h-16 object-contain rounded-xl bg-gray-50 border border-gray-100"
+            />
+            <button
+              onClick={onImageRemove}
+              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <X size={10}/>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-dj-300 hover:text-dj-500 transition-colors flex items-center justify-center gap-1"
+          >
+            <ImagePlus size={14}/> <span className="text-[10px] font-medium">Imagen</span>
+          </button>
+        )}
         <input
-          value={day.day_label ?? ''}
-          onChange={e => onLabelChange(e.target.value)}
-          placeholder="Ej: Sesión físico"
-          className="w-full text-xs font-bold text-center rounded-xl px-2 py-2 mb-2 bg-amber-50 text-amber-800 focus:outline-none focus:ring-2 focus:ring-dj-400"
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) onImageUpload(f) }}
         />
-      </div>
 
-      <div className="flex-1 px-2 pb-2 space-y-1.5">
-        {sortedMoments.map((m, i) => (
-          <MomentBlock
-            key={m.id}
-            index={i}
-            moment={m}
-            onChange={v => onMomentChange(m.id, v)}
-            onCategory={c => onMomentCategory(m.id, c)}
-            onRemove={() => onRemoveMoment(m.id)}
-          />
-        ))}
+        {/* Chips de etiqueta */}
+        <div className="flex flex-wrap gap-1">
+          {day.labels.map((lbl, idx) => (
+            <span
+              key={idx}
+              className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 text-[10px] font-bold px-2 py-1 rounded-lg"
+            >
+              {lbl}
+              <button onClick={() => onRemoveLabel(idx)} className="hover:text-red-500">
+                <X size={9}/>
+              </button>
+            </span>
+          ))}
+        </div>
 
-        <button
-          onClick={onAddMoment}
-          className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-dj-300 hover:text-dj-500 transition-colors flex items-center justify-center"
-        >
-          <Plus size={15}/>
-        </button>
+        {/* Input para nuevo chip */}
+        <input
+          value={newLabel}
+          onChange={e => setNewLabel(e.target.value)}
+          onKeyDown={handleLabelKeyDown}
+          onBlur={() => { if (newLabel.trim()) { onAddLabel(newLabel); setNewLabel('') } }}
+          placeholder="+ Etiqueta (Enter)"
+          className="w-full text-[10px] rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-dj-400 placeholder:text-gray-300"
+        />
+
+        {/* Separador */}
+        <div className="border-t border-gray-100"/>
+
+        {/* Momentos */}
+        <div className="space-y-1.5">
+          {sortedMoments.map((m, i) => (
+            <MomentBlock
+              key={m.id}
+              index={i}
+              moment={m}
+              onChange={v => onMomentChange(m.id, v)}
+              onCategory={c => onMomentCategory(m.id, c)}
+              onRemove={() => onRemoveMoment(m.id)}
+            />
+          ))}
+          <button
+            onClick={onAddMoment}
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-dj-300 hover:text-dj-500 transition-colors flex items-center justify-center"
+          >
+            <Plus size={15}/>
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// BLOQUE DE MOMENTO
+// ════════════════════════════════════════════════════════════════════════════
 function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
   index: number
   moment: MicrocycleMoment
@@ -546,7 +638,6 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
 
       {showCatPicker && pickerPos && createPortal(
         <>
-          {/* Overlay invisible para cerrar el menú al hacer click afuera */}
           <div className="fixed inset-0 z-[90]" onClick={() => setShowCatPicker(false)}/>
           <div
             className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-44"
@@ -576,7 +667,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MODAL DE COMPARTIR (link público de solo lectura)
+// MODAL DE COMPARTIR
 // ════════════════════════════════════════════════════════════════════════════
 function ShareModal({ macrocycleId, weekStart, onClose, onToast }: {
   macrocycleId: string
@@ -606,34 +697,20 @@ function ShareModal({ macrocycleId, weekStart, onClose, onToast }: {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="font-bold text-gray-900">Compartir microciclo</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
-            <X size={18}/>
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
         </div>
         <div className="p-5 space-y-3">
-          <p className="text-sm text-gray-500">
-            Cualquiera con este link puede ver esta semana, sin necesidad de iniciar sesión.
-          </p>
+          <p className="text-sm text-gray-500">Cualquiera con este link puede ver esta semana sin iniciar sesión.</p>
           {loading ? (
             <p className="text-sm text-gray-400">Generando link...</p>
           ) : (
             <div className="flex items-center gap-2">
-              <input
-                readOnly
-                value={url ?? ''}
-                className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 bg-gray-50 text-gray-600"
-              />
-              <button
-                onClick={handleCopy}
-                className="shrink-0 bg-dj-600 text-white rounded-xl px-3 py-2 hover:bg-dj-700 transition-colors"
-              >
+              <input readOnly value={url ?? ''} className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 bg-gray-50 text-gray-600"/>
+              <button onClick={handleCopy} className="shrink-0 bg-dj-600 text-white rounded-xl px-3 py-2 hover:bg-dj-700 transition-colors">
                 {copied ? <Check size={15}/> : <Copy size={15}/>}
               </button>
             </div>
