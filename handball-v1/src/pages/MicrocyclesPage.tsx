@@ -512,7 +512,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
               className="w-full h-16 object-contain rounded-xl bg-gray-50 border border-gray-100"
             />
             <button
-              onClick={onImageRemove}
+              onClick={() => { onImageRemove(); if (fileRef.current) fileRef.current.value = "" }}
               className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <X size={10}/>
@@ -531,7 +531,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) onImageUpload(f) }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) { onImageUpload(f); e.target.value = "" } }}
         />
 
         {/* Chips de etiqueta */}
