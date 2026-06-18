@@ -47,10 +47,9 @@ export async function updateMacrocycle(id: string, patch: Partial<Macrocycle>) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DÍAS DEL MICROCICLO (dependen directo de macrocycle_id + date)
+// DÍAS DEL MICROCICLO
 // ════════════════════════════════════════════════════════════════════════════
 
-// Trae todos los días de un mes calendario (Mesociclo = mes automático)
 export async function listDaysInMonth(macrocycleId: string, refDate: Date) {
   const start = format(startOfMonth(refDate), 'yyyy-MM-dd')
   const end   = format(endOfMonth(refDate), 'yyyy-MM-dd')
@@ -65,7 +64,6 @@ export async function listDaysInMonth(macrocycleId: string, refDate: Date) {
   return (data ?? []) as MicrocycleDay[]
 }
 
-// Trae los días de una semana puntual (Microciclo = semana Lun-Dom)
 export async function listDaysInWeek(macrocycleId: string, weekStart: Date) {
   const start = format(weekStart, 'yyyy-MM-dd')
   const end   = format(addDays(weekStart, 6), 'yyyy-MM-dd')
@@ -80,7 +78,6 @@ export async function listDaysInWeek(macrocycleId: string, weekStart: Date) {
   return (data ?? []) as MicrocycleDay[]
 }
 
-// Trae TODOS los días del macrociclo (para la estadística anual de contenidos)
 export async function listAllDays(macrocycleId: string) {
   const { data, error } = await supabase
     .from('microcycle_days')
@@ -92,8 +89,8 @@ export async function listAllDays(macrocycleId: string) {
 
 export async function upsertMicrocycleDay(input: {
   macrocycle_id: string
-  date: string                 // 'yyyy-MM-dd'
-  day_label?: string | null
+  date: string
+  labels: string[]
   rival_logo_url?: string | null
   moments: MicrocycleMoment[]
 }) {
@@ -103,7 +100,7 @@ export async function upsertMicrocycleDay(input: {
       {
         macrocycle_id: input.macrocycle_id,
         date: input.date,
-        day_label: input.day_label ?? null,
+        labels: input.labels,
         rival_logo_url: input.rival_logo_url ?? null,
         moments: input.moments,
       },
@@ -115,13 +112,29 @@ export async function upsertMicrocycleDay(input: {
   return data as MicrocycleDay
 }
 
-export async function deleteMicrocycleDay(id: string) {
-  const { error } = await supabase.from('microcycle_days').delete().eq('id', id)
-  if (error) throw error
+// ════════════════════════════════════════════════════════════════════════════
+// IMAGEN DEL DÍA — subida al bucket 'microcycles' de Storage
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function uploadDayImage(file: File, macrocycleId: string, date: string): Promise<string> {
+  const ext = file.name.split('.').pop()
+  const path = `${macrocycleId}/${date}.${ext}`
+  const { error: uploadError } = await supabase.storage
+    .from('microcycles')
+    .upload(path, file, { upsert: true })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('microcycles').getPublicUrl(path)
+  return data.publicUrl
+}
+
+export async function deleteDayImage(macrocycleId: string, date: string, ext: string) {
+  const path = `${macrocycleId}/${date}.${ext}`
+  await supabase.storage.from('microcycles').remove([path])
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// HELPERS DE MOMENTOS (array variable dentro de un día — JSON, no tabla)
+// HELPERS DE MOMENTOS
 // ════════════════════════════════════════════════════════════════════════════
 
 export function newMoment(content = '', category: ContentCategory | null = null): MicrocycleMoment {
@@ -151,15 +164,6 @@ export function updateMomentCategory(
   return moments.map(m => (m.id === momentId ? { ...m, category } : m))
 }
 
-export function reorderMoments(
-  moments: MicrocycleMoment[], fromIndex: number, toIndex: number,
-): MicrocycleMoment[] {
-  const sorted = [...moments].sort((a, b) => a.order - b.order)
-  const [moved] = sorted.splice(fromIndex, 1)
-  sorted.splice(toIndex, 0, moved)
-  return sorted.map((m, i) => ({ ...m, order: i }))
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // ESTADÍSTICAS — conteo de categorías para el gráfico de radar anual
 // ════════════════════════════════════════════════════════════════════════════
@@ -185,13 +189,13 @@ export function computeContentStats(days: MicrocycleDay[]): ContentCategoryStats
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SEMANAS DEL MES (para listar microciclos clickeables en el calendario)
+// SEMANAS DEL MES
 // ════════════════════════════════════════════════════════════════════════════
 
 export interface WeekInMonth {
   weekStart: Date
   weekEnd: Date
-  label: string // ej: "1 - 7 jun"
+  label: string
 }
 
 export function getWeeksInMonth(refDate: Date): WeekInMonth[] {
@@ -213,7 +217,7 @@ export function getWeeksInMonth(refDate: Date): WeekInMonth[] {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// COMPARTIR MICROCICLO (link público de solo lectura)
+// COMPARTIR MICROCICLO
 // ════════════════════════════════════════════════════════════════════════════
 
 export async function getOrCreateShareLink(
