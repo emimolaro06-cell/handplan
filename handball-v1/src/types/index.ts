@@ -107,7 +107,7 @@ export interface LibraryFilters {
   coach_name: string
 }
 
-// ─── Macrociclo / Microciclos (v2 — simplificado, calculado por fecha) ───────
+// ─── Macrociclo / Microciclos (v3 — labels array + imagen por día) ───────────
 // Mesociclo = un mes calendario (automático, no es tabla)
 // Microciclo = una semana Lunes-Domingo dentro de un mes (automático, no es tabla)
 
@@ -122,7 +122,7 @@ export interface MicrocycleDay {
   id: string
   macrocycle_id: string
   date: string               // 'yyyy-MM-dd'
-  day_label: string | null   // ej: "SESIÓN FÍSICO" o "RACING (L) PRIMER FECHA"
+  labels: string[]           // chips libres: ["Sesión físico", "vs Racing", ...]
   rival_logo_url: string | null
   moments: MicrocycleMoment[]
   created_at: string
