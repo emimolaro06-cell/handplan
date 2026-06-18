@@ -1,38 +1,38 @@
 import { supabase } from '@/lib/supabase'
+import { format, startOfMonth, endOfMonth, startOfWeek, addDays } from 'date-fns'
 import type {
-  Macrocycle, Mesocycle, Microcycle, MicrocycleDay, MicrocycleMoment, TeamCategory,
+  Macrocycle, MicrocycleDay, MicrocycleMoment, SharedMicrocycle,
+  TeamCategory, ContentCategory, ContentCategoryStats,
 } from '@/types'
 
 // ════════════════════════════════════════════════════════════════════════════
 // MACROCICLOS
 // ════════════════════════════════════════════════════════════════════════════
 
-export async function listMacrocycles(userId: string, teamCategory: TeamCategory) {
-  const { data, error } = await supabase
+export async function getOrCreateMacrocycle(userId: string, teamCategory: TeamCategory) {
+  const { data: existing, error: selectError } = await supabase
     .from('macrocycles')
     .select('*')
     .eq('user_id', userId)
     .eq('team_category', teamCategory)
     .order('start_date', { ascending: false })
-  if (error) throw error
-  return (data ?? []) as Macrocycle[]
-}
+    .limit(1)
+    .maybeSingle()
+  if (selectError) throw selectError
+  if (existing) return existing as Macrocycle
 
-export async function createMacrocycle(input: {
-  user_id: string
-  team_category: TeamCategory
-  name: string
-  start_date: string
-  end_date?: string | null
-  objective?: string | null
-}) {
-  const { data, error } = await supabase
+  const { data: created, error: insertError } = await supabase
     .from('macrocycles')
-    .insert(input)
+    .insert({
+      user_id: userId,
+      team_category: teamCategory,
+      name: `Temporada ${new Date().getFullYear()}`,
+      start_date: format(new Date(), 'yyyy-MM-dd'),
+    })
     .select()
     .single()
-  if (error) throw error
-  return data as Macrocycle
+  if (insertError) throw insertError
+  return created as Macrocycle
 }
 
 export async function updateMacrocycle(id: string, patch: Partial<Macrocycle>) {
@@ -46,131 +46,52 @@ export async function updateMacrocycle(id: string, patch: Partial<Macrocycle>) {
   return data as Macrocycle
 }
 
-export async function deleteMacrocycle(id: string) {
-  const { error } = await supabase.from('macrocycles').delete().eq('id', id)
-  if (error) throw error
-}
-
 // ════════════════════════════════════════════════════════════════════════════
-// MESOCICLOS
+// DÍAS DEL MICROCICLO (dependen directo de macrocycle_id + date)
 // ════════════════════════════════════════════════════════════════════════════
 
-export async function listMesocycles(macrocycleId: string) {
-  const { data, error } = await supabase
-    .from('mesocycles')
-    .select('*')
-    .eq('macrocycle_id', macrocycleId)
-    .order('number', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as Mesocycle[]
-}
-
-// No se pasa "number": lo asigna solo el trigger autonumerador en Supabase.
-export async function createMesocycle(input: {
-  macrocycle_id: string
-  name?: string | null
-  objective?: string | null
-  start_date?: string | null
-  end_date?: string | null
-}) {
-  const { data, error } = await supabase
-    .from('mesocycles')
-    .insert({ ...input, number: null })
-    .select()
-    .single()
-  if (error) throw error
-  return data as Mesocycle
-}
-
-export async function updateMesocycle(id: string, patch: Partial<Mesocycle>) {
-  const { data, error } = await supabase
-    .from('mesocycles')
-    .update(patch)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Mesocycle
-}
-
-export async function deleteMesocycle(id: string) {
-  const { error } = await supabase.from('mesocycles').delete().eq('id', id)
-  if (error) throw error
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// MICROCICLOS
-// ════════════════════════════════════════════════════════════════════════════
-
-export async function listMicrocycles(mesocycleId: string) {
-  const { data, error } = await supabase
-    .from('microcycles')
-    .select('*')
-    .eq('mesocycle_id', mesocycleId)
-    .order('number', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as Microcycle[]
-}
-
-export async function getMicrocycle(id: string) {
-  const { data, error } = await supabase
-    .from('microcycles')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as Microcycle
-}
-
-// No se pasa "number": lo asigna solo el trigger autonumerador en Supabase.
-// week_start_date debe ser el Lunes de la semana ('yyyy-MM-dd').
-export async function createMicrocycle(input: {
-  mesocycle_id: string
-  week_start_date: string
-  objective?: string | null
-}) {
-  const { data, error } = await supabase
-    .from('microcycles')
-    .insert({ ...input, number: null })
-    .select()
-    .single()
-  if (error) throw error
-  return data as Microcycle
-}
-
-export async function updateMicrocycle(id: string, patch: Partial<Microcycle>) {
-  const { data, error } = await supabase
-    .from('microcycles')
-    .update(patch)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as Microcycle
-}
-
-export async function deleteMicrocycle(id: string) {
-  const { error } = await supabase.from('microcycles').delete().eq('id', id)
-  if (error) throw error
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// DÍAS DEL MICROCICLO
-// ════════════════════════════════════════════════════════════════════════════
-
-export async function listMicrocycleDays(microcycleId: string) {
+// Trae todos los días de un mes calendario (Mesociclo = mes automático)
+export async function listDaysInMonth(macrocycleId: string, refDate: Date) {
+  const start = format(startOfMonth(refDate), 'yyyy-MM-dd')
+  const end   = format(endOfMonth(refDate), 'yyyy-MM-dd')
   const { data, error } = await supabase
     .from('microcycle_days')
     .select('*')
-    .eq('microcycle_id', microcycleId)
+    .eq('macrocycle_id', macrocycleId)
+    .gte('date', start)
+    .lte('date', end)
     .order('date', { ascending: true })
   if (error) throw error
   return (data ?? []) as MicrocycleDay[]
 }
 
-// Crea o actualiza el día (upsert por la UNIQUE(microcycle_id, date)).
+// Trae los días de una semana puntual (Microciclo = semana Lun-Dom)
+export async function listDaysInWeek(macrocycleId: string, weekStart: Date) {
+  const start = format(weekStart, 'yyyy-MM-dd')
+  const end   = format(addDays(weekStart, 6), 'yyyy-MM-dd')
+  const { data, error } = await supabase
+    .from('microcycle_days')
+    .select('*')
+    .eq('macrocycle_id', macrocycleId)
+    .gte('date', start)
+    .lte('date', end)
+    .order('date', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as MicrocycleDay[]
+}
+
+// Trae TODOS los días del macrociclo (para la estadística anual de contenidos)
+export async function listAllDays(macrocycleId: string) {
+  const { data, error } = await supabase
+    .from('microcycle_days')
+    .select('*')
+    .eq('macrocycle_id', macrocycleId)
+  if (error) throw error
+  return (data ?? []) as MicrocycleDay[]
+}
+
 export async function upsertMicrocycleDay(input: {
-  microcycle_id: string
+  macrocycle_id: string
   date: string                 // 'yyyy-MM-dd'
   day_label?: string | null
   rival_logo_url?: string | null
@@ -180,13 +101,13 @@ export async function upsertMicrocycleDay(input: {
     .from('microcycle_days')
     .upsert(
       {
-        microcycle_id: input.microcycle_id,
+        macrocycle_id: input.macrocycle_id,
         date: input.date,
         day_label: input.day_label ?? null,
         rival_logo_url: input.rival_logo_url ?? null,
         moments: input.moments,
       },
-      { onConflict: 'microcycle_id,date' },
+      { onConflict: 'macrocycle_id,date' },
     )
     .select()
     .single()
@@ -203,8 +124,8 @@ export async function deleteMicrocycleDay(id: string) {
 // HELPERS DE MOMENTOS (array variable dentro de un día — JSON, no tabla)
 // ════════════════════════════════════════════════════════════════════════════
 
-export function newMoment(content = ''): MicrocycleMoment {
-  return { id: crypto.randomUUID(), order: 0, content }
+export function newMoment(content = '', category: ContentCategory | null = null): MicrocycleMoment {
+  return { id: crypto.randomUUID(), order: 0, content, category }
 }
 
 export function addMomentToDay(moments: MicrocycleMoment[], content = ''): MicrocycleMoment[] {
@@ -224,6 +145,12 @@ export function updateMomentContent(
   return moments.map(m => (m.id === momentId ? { ...m, content } : m))
 }
 
+export function updateMomentCategory(
+  moments: MicrocycleMoment[], momentId: string, category: ContentCategory | null,
+): MicrocycleMoment[] {
+  return moments.map(m => (m.id === momentId ? { ...m, category } : m))
+}
+
 export function reorderMoments(
   moments: MicrocycleMoment[], fromIndex: number, toIndex: number,
 ): MicrocycleMoment[] {
@@ -231,4 +158,95 @@ export function reorderMoments(
   const [moved] = sorted.splice(fromIndex, 1)
   sorted.splice(toIndex, 0, moved)
   return sorted.map((m, i) => ({ ...m, order: i }))
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ESTADÍSTICAS — conteo de categorías para el gráfico de radar anual
+// ════════════════════════════════════════════════════════════════════════════
+
+const EMPTY_STATS: ContentCategoryStats = {
+  'Técnica individual OFENSIVA': 0,
+  'Técnica individual DEFENSIVA': 0,
+  'Táctica OFENSIVA': 0,
+  'Táctica DEFENSIVA': 0,
+  'MIXTO': 0,
+}
+
+export function computeContentStats(days: MicrocycleDay[]): ContentCategoryStats {
+  const stats: ContentCategoryStats = { ...EMPTY_STATS }
+  for (const day of days) {
+    for (const moment of day.moments) {
+      if (moment.category) {
+        stats[moment.category] = (stats[moment.category] ?? 0) + 1
+      }
+    }
+  }
+  return stats
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SEMANAS DEL MES (para listar microciclos clickeables en el calendario)
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface WeekInMonth {
+  weekStart: Date
+  weekEnd: Date
+  label: string // ej: "1 - 7 jun"
+}
+
+export function getWeeksInMonth(refDate: Date): WeekInMonth[] {
+  const monthStart = startOfMonth(refDate)
+  const monthEnd = endOfMonth(refDate)
+  const weeks: WeekInMonth[] = []
+
+  let cursor = startOfWeek(monthStart, { weekStartsOn: 1 })
+  while (cursor <= monthEnd) {
+    const weekEnd = addDays(cursor, 6)
+    weeks.push({
+      weekStart: cursor,
+      weekEnd,
+      label: `${format(cursor, 'd')} – ${format(weekEnd, 'd MMM')}`,
+    })
+    cursor = addDays(cursor, 7)
+  }
+  return weeks
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COMPARTIR MICROCICLO (link público de solo lectura)
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function getOrCreateShareLink(
+  macrocycleId: string, weekStartDate: string, userId: string,
+) {
+  const { data: existing, error: selectError } = await supabase
+    .from('shared_microcycles')
+    .select('*')
+    .eq('macrocycle_id', macrocycleId)
+    .eq('week_start_date', weekStartDate)
+    .maybeSingle()
+  if (selectError) throw selectError
+  if (existing) return existing as SharedMicrocycle
+
+  const { data: created, error: insertError } = await supabase
+    .from('shared_microcycles')
+    .insert({ macrocycle_id: macrocycleId, week_start_date: weekStartDate, created_by: userId })
+    .select()
+    .single()
+  if (insertError) throw insertError
+  return created as SharedMicrocycle
+}
+
+export async function getSharedMicrocycleByToken(token: string) {
+  const { data: shared, error } = await supabase
+    .from('shared_microcycles')
+    .select('*')
+    .eq('token', token)
+    .single()
+  if (error) throw error
+  return shared as SharedMicrocycle
+}
+
+export function buildShareUrl(token: string) {
+  return `${window.location.origin}/microciclo-compartido/${token}`
 }
