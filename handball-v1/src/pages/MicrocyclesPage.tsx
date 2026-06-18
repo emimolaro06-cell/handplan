@@ -10,6 +10,7 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from 'recharts'
 import { clsx } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { Button, Toast } from '@/components/ui/index'
 import {
@@ -371,7 +372,14 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
     try {
       const promises = Object.entries(days).map(([dateKey, day]) => {
         if (!day) return Promise.resolve()
-        if (day.labels.length === 0 && day.moments.length === 0 && !day.rival_logo_url) return Promise.resolve()
+        const isEmpty = day.labels.length === 0 && day.moments.length === 0 && !day.rival_logo_url
+        if (isEmpty) {
+          // Si el día tiene ID (existe en Supabase) y quedó vacío, lo borramos
+          if (day.id) {
+            return supabase.from('microcycle_days').delete().eq('id', day.id)
+          }
+          return Promise.resolve()
+        }
         return upsertMicrocycleDay({
           macrocycle_id: macro.id,
           date: dateKey,
