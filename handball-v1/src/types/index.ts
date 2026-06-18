@@ -106,43 +106,27 @@ export interface LibraryFilters {
   content_category: ContentCategory | ''
   coach_name: string
 }
-// ─── Macrociclos / Mesociclos / Microciclos ──────────────────────────────────
+
+// ─── Macrociclo / Microciclos (v2 — simplificado, calculado por fecha) ───────
+// Mesociclo = un mes calendario (automático, no es tabla)
+// Microciclo = una semana Lunes-Domingo dentro de un mes (automático, no es tabla)
 
 export interface MicrocycleMoment {
   id: string
   order: number
   content: string
+  category: ContentCategory | null
 }
 
 export interface MicrocycleDay {
   id: string
-  microcycle_id: string
+  macrocycle_id: string
   date: string               // 'yyyy-MM-dd'
   day_label: string | null   // ej: "SESIÓN FÍSICO" o "RACING (L) PRIMER FECHA"
   rival_logo_url: string | null
   moments: MicrocycleMoment[]
   created_at: string
   updated_at: string
-}
-
-export interface Microcycle {
-  id: string
-  mesocycle_id: string
-  number: number
-  week_start_date: string    // Lunes de esa semana, 'yyyy-MM-dd'
-  objective: string | null
-  created_at: string
-}
-
-export interface Mesocycle {
-  id: string
-  macrocycle_id: string
-  number: number
-  name: string | null
-  objective: string | null
-  start_date: string | null
-  end_date: string | null
-  created_at: string
 }
 
 export interface Macrocycle {
@@ -153,6 +137,20 @@ export interface Macrocycle {
   start_date: string
   end_date: string | null
   objective: string | null
+  annual_objective: string | null
+  annual_observations: string | null
   created_at: string
   updated_at: string
 }
+
+export interface SharedMicrocycle {
+  id: string
+  macrocycle_id: string
+  week_start_date: string    // Lunes de la semana compartida, 'yyyy-MM-dd'
+  token: string
+  created_by: string
+  created_at: string
+}
+
+// Conteo de categorías para el gráfico de radar del Macrociclo
+export type ContentCategoryStats = Record<ContentCategory, number>
