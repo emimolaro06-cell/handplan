@@ -118,14 +118,26 @@ export async function upsertMicrocycleDay(input: {
 
 export async function uploadDayImage(file: File, macrocycleId: string, date: string): Promise<string> {
   const ext = file.name.split('.').pop()
-  const path = `${macrocycleId}/${date}.${ext}`
+  const timestamp = Date.now()
+  const path = `${macrocycleId}/${date}_${timestamp}.${ext}`
+
+  // Borrar archivos viejos del mismo día antes de subir el nuevo
+  const { data: existing } = await supabase.storage
+    .from('microcycles')
+    .list(macrocycleId, { search: date })
+  if (existing && existing.length > 0) {
+    const oldPaths = existing.map(f => `${macrocycleId}/${f.name}`)
+    await supabase.storage.from('microcycles').remove(oldPaths)
+  }
+
   const { error: uploadError } = await supabase.storage
     .from('microcycles')
-    .upload(path, file, { upsert: true })
+    .upload(path, file)
   if (uploadError) throw uploadError
 
   const { data } = supabase.storage.from('microcycles').getPublicUrl(path)
-  return data.publicUrl
+  // Agrega un cache-buster para que el navegador no muestre la imagen vieja
+  return data.publicUrl + `?t=${timestamp}`
 }
 
 export async function deleteDayImage(macrocycleId: string, date: string, ext: string) {
