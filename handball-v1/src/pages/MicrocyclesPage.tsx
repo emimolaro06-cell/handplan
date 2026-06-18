@@ -484,6 +484,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
   onImageRemove: () => void
 }) {
   const [newLabel, setNewLabel] = useState('')
+  const [fileInputKey, setFileInputKey] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const sortedMoments = [...day.moments].sort((a, b) => a.order - b.order)
 
@@ -512,7 +513,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
               className="w-full h-16 object-contain rounded-xl bg-gray-50 border border-gray-100"
             />
             <button
-              onClick={() => { onImageRemove(); if (fileRef.current) fileRef.current.value = "" }}
+              onClick={() => { onImageRemove(); setFileInputKey(k => k + 1) }}
               className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <X size={10}/>
@@ -527,11 +528,12 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
           </button>
         )}
         <input
+          key={fileInputKey}
           ref={fileRef}
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) { onImageUpload(f); e.target.value = "" } }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) onImageUpload(f) }}
         />
 
         {/* Chips de etiqueta */}
