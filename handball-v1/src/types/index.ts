@@ -106,3 +106,53 @@ export interface LibraryFilters {
   content_category: ContentCategory | ''
   coach_name: string
 }
+// ─── Macrociclos / Mesociclos / Microciclos ──────────────────────────────────
+
+export interface MicrocycleMoment {
+  id: string
+  order: number
+  content: string
+}
+
+export interface MicrocycleDay {
+  id: string
+  microcycle_id: string
+  date: string               // 'yyyy-MM-dd'
+  day_label: string | null   // ej: "SESIÓN FÍSICO" o "RACING (L) PRIMER FECHA"
+  rival_logo_url: string | null
+  moments: MicrocycleMoment[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Microcycle {
+  id: string
+  mesocycle_id: string
+  number: number
+  week_start_date: string    // Lunes de esa semana, 'yyyy-MM-dd'
+  objective: string | null
+  created_at: string
+}
+
+export interface Mesocycle {
+  id: string
+  macrocycle_id: string
+  number: number
+  name: string | null
+  objective: string | null
+  start_date: string | null
+  end_date: string | null
+  created_at: string
+}
+
+export interface Macrocycle {
+  id: string
+  user_id: string
+  team_category: TeamCategory
+  name: string
+  start_date: string
+  end_date: string | null
+  objective: string | null
+  created_at: string
+  updated_at: string
+}
