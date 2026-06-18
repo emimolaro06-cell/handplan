@@ -1,496 +1,286 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  ChevronLeft, Plus, X, Trash2, Calendar, FileDown,
-  Save, GripVertical, Shield, ChevronRight as ChevronRightIcon,
+  ChevronLeft, ChevronRight, Plus, X, Save, FileDown, Share2,
+  ChevronDown, ChevronUp, Copy, Check, Calendar,
 } from 'lucide-react'
-import { format, addWeeks, startOfWeek } from 'date-fns'
+import { format, addMonths, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
+import {
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
+} from 'recharts'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button, Toast } from '@/components/ui/index'
 import {
-  listMacrocycles, createMacrocycle, deleteMacrocycle,
-  listMesocycles, createMesocycle, deleteMesocycle,
-  listMicrocycles, createMicrocycle, deleteMicrocycle,
-  listMicrocycleDays, upsertMicrocycleDay,
-  addMomentToDay, removeMomentFromDay, updateMomentContent,
+  getOrCreateMacrocycle, updateMacrocycle,
+  listDaysInMonth, listAllDays, listDaysInWeek,
+  upsertMicrocycleDay, computeContentStats, getWeeksInMonth,
+  addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory,
+  getOrCreateShareLink, buildShareUrl,
 } from '@/lib/cycles'
 import { downloadMicrocyclePDF } from '@/lib/pdfMicrocycle'
 import type {
-  Macrocycle, Mesocycle, Microcycle, MicrocycleDay, MicrocycleMoment, TeamCategory,
+  Macrocycle, MicrocycleDay, MicrocycleMoment, TeamCategory, ContentCategory,
 } from '@/types'
 
-type Level = 'macro' | 'meso' | 'micro' | 'editor'
+type Level = 'macro' | 'editor'
 
-const WEEK_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const WEEK_LABELS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO']
+
+const CONTENT_SHORT: Record<ContentCategory, string> = {
+  'Técnica individual OFENSIVA':  'TÉC IND OF',
+  'Técnica individual DEFENSIVA': 'TÉC IND DEF',
+  'Táctica OFENSIVA':  'TAC OF',
+  'Táctica DEFENSIVA': 'TAC DEF',
+  'MIXTO': 'MIXTO',
+}
+
+const CONTENT_CATEGORIES: ContentCategory[] = [
+  'Técnica individual OFENSIVA', 'Técnica individual DEFENSIVA',
+  'Táctica OFENSIVA', 'Táctica DEFENSIVA', 'MIXTO',
+]
+
+const CONTENT_COLOR: Record<ContentCategory, string> = {
+  'Técnica individual OFENSIVA':  'bg-dj-600 text-white',
+  'Técnica individual DEFENSIVA': 'bg-blue-600 text-white',
+  'Táctica OFENSIVA':  'bg-amber-500 text-white',
+  'Táctica DEFENSIVA': 'bg-purple-600 text-white',
+  'MIXTO': 'bg-gray-600 text-white',
+}
 
 export function MicrocyclesPage() {
   const { profile, selectedCategory } = useAppStore()
   const category = selectedCategory as TeamCategory
 
   const [level, setLevel] = useState<Level>('macro')
+  const [macro, setMacro] = useState<Macrocycle | null>(null)
+  const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
-  const [macros, setMacros] = useState<Macrocycle[]>([])
-  const [activeMacro, setActiveMacro] = useState<Macrocycle | null>(null)
+  const [activeWeekStart, setActiveWeekStart] = useState<Date | null>(null)
 
-  const [mesos, setMesos] = useState<Mesocycle[]>([])
-  const [activeMeso, setActiveMeso] = useState<Mesocycle | null>(null)
-
-  const [micros, setMicros] = useState<Microcycle[]>([])
-  const [activeMicro, setActiveMicro] = useState<Microcycle | null>(null)
-
-  const [loading, setLoading] = useState(false)
-
-  // ── Carga de Macrociclos ──
   useEffect(() => {
     if (!profile || !category) return
     setLoading(true)
-    listMacrocycles(profile.id, category)
-      .then(setMacros)
-      .catch(() => setToast({ msg: 'Error al cargar macrociclos.', type: 'error' }))
+    getOrCreateMacrocycle(profile.id, category)
+      .then(setMacro)
+      .catch(() => setToast({ msg: 'Error al cargar el macrociclo.', type: 'error' }))
       .finally(() => setLoading(false))
   }, [profile, category])
 
-  function openMacro(m: Macrocycle) {
-    setActiveMacro(m)
-    setLoading(true)
-    listMesocycles(m.id)
-      .then(data => { setMesos(data); setLevel('meso') })
-      .catch(() => setToast({ msg: 'Error al cargar mesociclos.', type: 'error' }))
-      .finally(() => setLoading(false))
-  }
-
-  function openMeso(m: Mesocycle) {
-    setActiveMeso(m)
-    setLoading(true)
-    listMicrocycles(m.id)
-      .then(data => { setMicros(data); setLevel('micro') })
-      .catch(() => setToast({ msg: 'Error al cargar microciclos.', type: 'error' }))
-      .finally(() => setLoading(false))
-  }
-
-  function openMicro(m: Microcycle) {
-    setActiveMicro(m)
+  function openWeek(weekStart: Date) {
+    setActiveWeekStart(weekStart)
     setLevel('editor')
   }
 
-  async function handleCreateMacro(name: string, startDate: string) {
-    if (!profile) return
-    try {
-      const created = await createMacrocycle({
-        user_id: profile.id, team_category: category, name, start_date: startDate,
-      })
-      setMacros(prev => [created, ...prev])
-      setToast({ msg: 'Macrociclo creado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al crear el macrociclo.', type: 'error' })
-    }
-  }
-
-  async function handleCreateMeso(name: string, objective: string) {
-    if (!activeMacro) return
-    try {
-      const created = await createMesocycle({ macrocycle_id: activeMacro.id, name, objective })
-      setMesos(prev => [...prev, created].sort((a, b) => a.number - b.number))
-      setToast({ msg: 'Mesociclo creado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al crear el mesociclo.', type: 'error' })
-    }
-  }
-
-  async function handleCreateMicro() {
-    if (!activeMeso) return
-    try {
-      // Próxima semana disponible: si hay microciclos previos, continúa después del último.
-      let weekStart: Date
-      if (micros.length > 0) {
-        const last = micros[micros.length - 1]
-        weekStart = addWeeks(new Date(last.week_start_date + 'T12:00:00'), 1)
-      } else {
-        weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
-      }
-      const created = await createMicrocycle({
-        mesocycle_id: activeMeso.id,
-        week_start_date: format(weekStart, 'yyyy-MM-dd'),
-      })
-      setMicros(prev => [...prev, created].sort((a, b) => a.number - b.number))
-      setToast({ msg: 'Microciclo creado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al crear el microciclo.', type: 'error' })
-    }
-  }
-
-  async function handleDeleteMacro(id: string) {
-    try {
-      await deleteMacrocycle(id)
-      setMacros(prev => prev.filter(m => m.id !== id))
-      setToast({ msg: 'Macrociclo eliminado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al eliminar.', type: 'error' })
-    }
-  }
-
-  async function handleDeleteMeso(id: string) {
-    try {
-      await deleteMesocycle(id)
-      setMesos(prev => prev.filter(m => m.id !== id))
-      setToast({ msg: 'Mesociclo eliminado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al eliminar.', type: 'error' })
-    }
-  }
-
-  async function handleDeleteMicro(id: string) {
-    try {
-      await deleteMicrocycle(id)
-      setMicros(prev => prev.filter(m => m.id !== id))
-      setToast({ msg: 'Microciclo eliminado.', type: 'success' })
-    } catch {
-      setToast({ msg: 'Error al eliminar.', type: 'error' })
-    }
-  }
-
-  // ════════════════════════════════════════════════════════════════════════
-  // Breadcrumb de navegación
-  // ════════════════════════════════════════════════════════════════════════
-  function Breadcrumb() {
-    return (
-      <div className="flex items-center gap-1.5 text-sm flex-wrap">
-        <button
-          onClick={() => setLevel('macro')}
-          className={clsx('font-semibold', level === 'macro' ? 'text-dj-700' : 'text-gray-400 hover:text-dj-600')}
-        >
-          Macrociclos
-        </button>
-        {activeMacro && (
-          <>
-            <ChevronRightIcon size={14} className="text-gray-300"/>
-            <button
-              onClick={() => setLevel('meso')}
-              className={clsx('font-semibold', level === 'meso' ? 'text-dj-700' : 'text-gray-400 hover:text-dj-600')}
-            >
-              {activeMacro.name}
-            </button>
-          </>
-        )}
-        {activeMeso && (
-          <>
-            <ChevronRightIcon size={14} className="text-gray-300"/>
-            <button
-              onClick={() => setLevel('micro')}
-              className={clsx('font-semibold', level === 'micro' ? 'text-dj-700' : 'text-gray-400 hover:text-dj-600')}
-            >
-              Mesociclo {activeMeso.number}
-            </button>
-          </>
-        )}
-        {activeMicro && level === 'editor' && (
-          <>
-            <ChevronRightIcon size={14} className="text-gray-300"/>
-            <span className="font-semibold text-dj-700">Microciclo {activeMicro.number}</span>
-          </>
-        )}
-      </div>
-    )
-  }
+  if (loading) return <p className="text-sm text-gray-400 py-6">Cargando planificación anual...</p>
+  if (!macro) return null
 
   return (
-    <div className="space-y-4 pb-8">
-      <Breadcrumb/>
-
+    <div className="space-y-4">
       {level === 'macro' && (
-        <MacroList
-          macros={macros}
-          loading={loading}
-          onOpen={openMacro}
-          onCreate={handleCreateMacro}
-          onDelete={handleDeleteMacro}
-        />
+        <MacroView macro={macro} onUpdateMacro={setMacro} onOpenWeek={openWeek} onToast={setToast}/>
       )}
-
-      {level === 'meso' && activeMacro && (
-        <MesoList
-          macro={activeMacro}
-          mesos={mesos}
-          loading={loading}
-          onBack={() => setLevel('macro')}
-          onOpen={openMeso}
-          onCreate={handleCreateMeso}
-          onDelete={handleDeleteMeso}
-        />
-      )}
-
-      {level === 'micro' && activeMeso && (
-        <MicroList
-          meso={activeMeso}
-          micros={micros}
-          loading={loading}
-          onBack={() => setLevel('meso')}
-          onOpen={openMicro}
-          onCreate={handleCreateMicro}
-          onDelete={handleDeleteMicro}
-        />
-      )}
-
-      {level === 'editor' && activeMicro && activeMeso && (
+      {level === 'editor' && activeWeekStart && (
         <MicrocycleEditor
-          microcycle={activeMicro}
-          mesocycle={activeMeso}
-          onBack={() => setLevel('micro')}
+          macro={macro}
+          weekStart={activeWeekStart}
+          onBack={() => setLevel('macro')}
           onToast={setToast}
         />
       )}
-
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
     </div>
   )
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// NIVEL 1 — Lista de Macrociclos
+// VISTA MACROCICLO — objetivos, observaciones, radar, calendario de meses
 // ════════════════════════════════════════════════════════════════════════════
-function MacroList({ macros, loading, onOpen, onCreate, onDelete }: {
-  macros: Macrocycle[]
-  loading: boolean
-  onOpen: (m: Macrocycle) => void
-  onCreate: (name: string, startDate: string) => void
-  onDelete: (id: string) => void
-}) {
-  const [showForm, setShowForm] = useState(false)
-  const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900 font-display">Macrociclos (temporadas)</h2>
-        <Button size="sm" icon={<Plus size={15}/>} onClick={() => setShowForm(true)}>
-          Nuevo macrociclo
-        </Button>
-      </div>
-
-      {loading && <p className="text-sm text-gray-400">Cargando...</p>}
-
-      {!loading && macros.length === 0 && (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-          <p className="text-gray-400 text-sm">Todavía no hay macrociclos para esta categoría.</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {macros.map(m => (
-          <div
-            key={m.id}
-            onClick={() => onOpen(m)}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 cursor-pointer hover:border-dj-300 hover:shadow-md transition-all group"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-bold text-gray-900">{m.name}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Desde {format(new Date(m.start_date + 'T12:00:00'), "d MMM yyyy", { locale: es })}
-                </p>
-              </div>
-              <button
-                onClick={e => { e.stopPropagation(); onDelete(m.id) }}
-                className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={15}/>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showForm && (
-        <FormModal title="Nuevo macrociclo" onClose={() => setShowForm(false)}>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Nombre</label>
-          <input
-            value={name} onChange={e => setName(e.target.value)}
-            placeholder="Ej: Temporada 2026"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-dj-400"
-          />
-          <label className="text-xs font-medium text-gray-600 block mb-1">Fecha de inicio</label>
-          <input
-            type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-dj-400"
-          />
-          <Button
-            className="w-full"
-            disabled={!name.trim()}
-            onClick={() => { onCreate(name.trim(), startDate); setShowForm(false); setName('') }}
-          >
-            Crear
-          </Button>
-        </FormModal>
-      )}
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// NIVEL 2 — Lista de Mesociclos
-// ════════════════════════════════════════════════════════════════════════════
-function MesoList({ macro, mesos, loading, onBack, onOpen, onCreate, onDelete }: {
+function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   macro: Macrocycle
-  mesos: Mesocycle[]
-  loading: boolean
-  onBack: () => void
-  onOpen: (m: Mesocycle) => void
-  onCreate: (name: string, objective: string) => void
-  onDelete: (id: string) => void
+  onUpdateMacro: (m: Macrocycle) => void
+  onOpenWeek: (weekStart: Date) => void
+  onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
-  const [showForm, setShowForm] = useState(false)
-  const [name, setName] = useState('')
-  const [objective, setObjective] = useState('')
+  const [showInfo, setShowInfo] = useState(false)
+  const [annualObjective, setAnnualObjective] = useState(macro.annual_objective ?? '')
+  const [annualObservations, setAnnualObservations] = useState(macro.annual_observations ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [monthDays, setMonthDays] = useState<MicrocycleDay[]>([])
+  const [allDays, setAllDays] = useState<MicrocycleDay[]>([])
+  const [loadingMonth, setLoadingMonth] = useState(true)
+
+  useEffect(() => {
+    setLoadingMonth(true)
+    listDaysInMonth(macro.id, currentMonth)
+      .then(setMonthDays)
+      .finally(() => setLoadingMonth(false))
+  }, [macro.id, currentMonth])
+
+  useEffect(() => {
+    listAllDays(macro.id).then(setAllDays)
+  }, [macro.id])
+
+  const stats = useMemo(() => computeContentStats(allDays), [allDays])
+  const radarData = CONTENT_CATEGORIES.map(c => ({ category: CONTENT_SHORT[c], value: stats[c] }))
+  const hasAnyStats = Object.values(stats).some(v => v > 0)
+
+  const weeks = useMemo(() => getWeeksInMonth(currentMonth), [currentMonth])
+
+  function weekHasContent(weekStart: Date, weekEnd: Date) {
+    return monthDays.some(d => {
+      const date = new Date(d.date + 'T12:00:00')
+      return date >= weekStart && date <= weekEnd && (d.day_label || d.moments.length > 0)
+    })
+  }
+
+  async function handleSaveInfo() {
+    setSaving(true)
+    try {
+      const updated = await updateMacrocycle(macro.id, {
+        annual_objective: annualObjective,
+        annual_observations: annualObservations,
+      })
+      onUpdateMacro(updated)
+      onToast({ msg: 'Información anual guardada.', type: 'success' })
+    } catch {
+      onToast({ msg: 'Error al guardar.', type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-dj-600">
-          <ChevronLeft size={16}/> Volver
-        </button>
-        <Button size="sm" icon={<Plus size={15}/>} onClick={() => setShowForm(true)}>
-          Nuevo mesociclo
-        </Button>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
+        <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
       </div>
 
-      <h2 className="text-lg font-bold text-gray-900 font-display">{macro.name} — Mesociclos</h2>
-
-      {loading && <p className="text-sm text-gray-400">Cargando...</p>}
-
-      {!loading && mesos.length === 0 && (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-          <p className="text-gray-400 text-sm">Todavía no hay mesociclos en este macrociclo.</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {mesos.map(m => (
-          <div
-            key={m.id}
-            onClick={() => onOpen(m)}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 cursor-pointer hover:border-dj-300 hover:shadow-md transition-all group"
-          >
-            <div className="flex items-start justify-between">
+      {/* ── Objetivos y Observaciones anuales ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
+          onClick={() => setShowInfo(!showInfo)}
+        >
+          <span className="font-semibold text-gray-800 text-sm">Objetivos y observaciones anuales</span>
+          {showInfo ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+        </button>
+        {showInfo && (
+          <div className="px-5 pb-5 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="font-bold text-gray-900">Mesociclo {m.number}</p>
-                {m.name && <p className="text-sm text-gray-600 mt-0.5">{m.name}</p>}
-                {m.objective && <p className="text-xs text-gray-400 mt-1">{m.objective}</p>}
+                <label className="text-xs font-medium text-gray-700 block mb-1">Objetivos anuales</label>
+                <textarea
+                  value={annualObjective}
+                  onChange={e => setAnnualObjective(e.target.value)}
+                  rows={4}
+                  placeholder="Ej: Consolidar la base técnica individual y mejorar el rendimiento defensivo de cara al torneo provincial..."
+                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
+                />
               </div>
-              <button
-                onClick={e => { e.stopPropagation(); onDelete(m.id) }}
-                className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={15}/>
-              </button>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Observaciones</label>
+                <textarea
+                  value={annualObservations}
+                  onChange={e => setAnnualObservations(e.target.value)}
+                  rows={4}
+                  placeholder="Notas generales de la temporada..."
+                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
+                />
+              </div>
             </div>
+            <Button size="sm" icon={<Save size={14}/>} loading={saving} onClick={handleSaveInfo}>
+              Guardar
+            </Button>
           </div>
-        ))}
+        )}
       </div>
 
-      {showForm && (
-        <FormModal title="Nuevo mesociclo" onClose={() => setShowForm(false)}>
-          <p className="text-xs text-gray-400 mb-3">El número se asigna automáticamente.</p>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Nombre (opcional)</label>
-          <input
-            value={name} onChange={e => setName(e.target.value)}
-            placeholder="Ej: Pretemporada física"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-dj-400"
-          />
-          <label className="text-xs font-medium text-gray-600 block mb-1">Objetivo (opcional)</label>
-          <textarea
-            value={objective} onChange={e => setObjective(e.target.value)}
-            rows={3}
-            placeholder="Ej: Desarrollar base física y técnica individual"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
-          />
-          <Button
-            className="w-full"
-            onClick={() => { onCreate(name.trim(), objective.trim()); setShowForm(false); setName(''); setObjective('') }}
-          >
-            Crear
-          </Button>
-        </FormModal>
-      )}
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// NIVEL 3 — Lista de Microciclos
-// ════════════════════════════════════════════════════════════════════════════
-function MicroList({ meso, micros, loading, onBack, onOpen, onCreate, onDelete }: {
-  meso: Mesocycle
-  micros: Microcycle[]
-  loading: boolean
-  onBack: () => void
-  onOpen: (m: Microcycle) => void
-  onCreate: () => void
-  onDelete: (id: string) => void
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-dj-600">
-          <ChevronLeft size={16}/> Volver
-        </button>
-        <Button size="sm" icon={<Plus size={15}/>} onClick={onCreate}>
-          Nuevo microciclo
-        </Button>
+      {/* ── Gráfico de radar: contenidos más trabajados ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <h3 className="font-semibold text-gray-800 text-sm mb-2">Contenidos más trabajados durante el año</h3>
+        {!hasAnyStats ? (
+          <p className="text-gray-400 text-sm text-center py-8">
+            Todavía no hay contenidos categorizados en los microciclos. A medida que vayas completando semanas, este gráfico se va a llenar solo.
+          </p>
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="#e5e7eb"/>
+                <PolarAngleAxis dataKey="category" tick={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}/>
+                <PolarRadiusAxis tick={{ fill: '#9ca3af', fontSize: 9 }}/>
+                <Radar dataKey="value" stroke="#1e8a1e" fill="#1e8a1e" fillOpacity={0.35}/>
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
-      <h2 className="text-lg font-bold text-gray-900 font-display">Mesociclo {meso.number} — Microciclos</h2>
-
-      {loading && <p className="text-sm text-gray-400">Cargando...</p>}
-
-      {!loading && micros.length === 0 && (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-          <p className="text-gray-400 text-sm">Todavía no hay microciclos en este mesociclo.</p>
+      {/* ── Calendario de meses (Mesociclo) con semanas (Microciclo) ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-800 text-sm">Mesociclo (mes) y sus microciclos (semanas)</h3>
+          <div className="flex items-center gap-2 bg-dj-800 rounded-xl px-3 py-1.5">
+            <button onClick={() => setCurrentMonth(d => subMonths(d, 1))} className="text-white/60 hover:text-white">
+              <ChevronLeft size={16}/>
+            </button>
+            <p className="text-white font-bold text-sm capitalize min-w-32 text-center">
+              {format(currentMonth, 'MMMM yyyy', { locale: es })}
+            </p>
+            <button onClick={() => setCurrentMonth(d => addMonths(d, 1))} className="text-white/60 hover:text-white">
+              <ChevronRight size={16}/>
+            </button>
+          </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {micros.map(m => {
-          const weekStart = new Date(m.week_start_date + 'T12:00:00')
-          const weekEnd = addWeeks(weekStart, 0)
-          weekEnd.setDate(weekStart.getDate() + 6)
-          return (
-            <div
-              key={m.id}
-              onClick={() => onOpen(m)}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 cursor-pointer hover:border-dj-300 hover:shadow-md transition-all group"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-bold text-gray-900">Microciclo {m.number}</p>
-                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    <Calendar size={12}/>
-                    {format(weekStart, 'd MMM', { locale: es })} – {format(weekEnd, 'd MMM', { locale: es })}
-                  </p>
-                </div>
+        {loadingMonth ? (
+          <p className="text-sm text-gray-400 py-4">Cargando...</p>
+        ) : (
+          <div className="space-y-2">
+            {weeks.map(week => {
+              const hasContent = weekHasContent(week.weekStart, week.weekEnd)
+              return (
                 <button
-                  onClick={e => { e.stopPropagation(); onDelete(m.id) }}
-                  className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  key={week.weekStart.toISOString()}
+                  onClick={() => onOpenWeek(week.weekStart)}
+                  className={clsx(
+                    'w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left',
+                    hasContent
+                      ? 'border-dj-300 bg-dj-50 hover:border-dj-500'
+                      : 'border-gray-100 bg-gray-50 hover:border-gray-300',
+                  )}
                 >
-                  <Trash2 size={15}/>
+                  <div className="flex items-center gap-2.5">
+                    <Calendar size={15} className={hasContent ? 'text-dj-600' : 'text-gray-400'}/>
+                    <span className="font-semibold text-gray-800 text-sm">{week.label}</span>
+                  </div>
+                  <span className={clsx(
+                    'text-xs font-bold px-2.5 py-1 rounded-lg',
+                    hasContent ? 'bg-dj-600 text-white' : 'text-gray-400',
+                  )}>
+                    {hasContent ? 'Con contenido' : 'Vacío'}
+                  </span>
                 </button>
-              </div>
-            </div>
-          )
-        })}
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// EDITOR DEL MICROCICLO (la grilla tipo imagen: columnas por día, momentos apilables)
+// EDITOR DEL MICROCICLO (semana puntual, Lun-Dom)
 // ════════════════════════════════════════════════════════════════════════════
-function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
-  microcycle: Microcycle
-  mesocycle: Mesocycle
+function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
+  macro: Macrocycle
+  weekStart: Date
   onBack: () => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
@@ -498,17 +288,18 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [showShare, setShowShare] = useState(false)
 
-  const weekStart = new Date(microcycle.week_start_date + 'T12:00:00')
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
     return d
   })
+  const weekEnd = weekDates[6]
 
   useEffect(() => {
     setLoading(true)
-    listMicrocycleDays(microcycle.id)
+    listDaysInWeek(macro.id, weekStart)
       .then(existing => {
         const map: Record<string, MicrocycleDay | null> = {}
         weekDates.forEach(d => {
@@ -517,14 +308,14 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
         })
         setDays(map)
       })
-      .catch(() => onToast({ msg: 'Error al cargar el microciclo.', type: 'error' }))
+      .catch(() => onToast({ msg: 'Error al cargar la semana.', type: 'error' }))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [microcycle.id])
+  }, [macro.id, weekStart.getTime()])
 
   function getDay(dateKey: string): MicrocycleDay {
     return days[dateKey] ?? {
-      id: '', microcycle_id: microcycle.id, date: dateKey,
+      id: '', macrocycle_id: macro.id, date: dateKey,
       day_label: null, rival_logo_url: null, moments: [],
       created_at: '', updated_at: '',
     }
@@ -549,15 +340,19 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
     patchDay(dateKey, { moments: updateMomentContent(day.moments, momentId, content) })
   }
 
+  function handleMomentCategory(dateKey: string, momentId: string, category: ContentCategory | null) {
+    const day = getDay(dateKey)
+    patchDay(dateKey, { moments: updateMomentCategory(day.moments, momentId, category) })
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
       const promises = Object.entries(days).map(([dateKey, day]) => {
         if (!day) return Promise.resolve()
-        // Solo guarda días que tengan algo (etiqueta o al menos un momento)
         if (!day.day_label && day.moments.length === 0) return Promise.resolve()
         return upsertMicrocycleDay({
-          microcycle_id: microcycle.id,
+          macrocycle_id: macro.id,
           date: dateKey,
           day_label: day.day_label,
           rival_logo_url: day.rival_logo_url,
@@ -578,8 +373,8 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
     try {
       const orderedDays = weekDates.map(d => getDay(format(d, 'yyyy-MM-dd')))
       await downloadMicrocyclePDF({
-        mesocycleNumber: mesocycle.number,
-        microcycleNumber: microcycle.number,
+        mesocycleNumber: weekStart.getMonth() + 1,
+        microcycleNumber: Math.ceil(weekStart.getDate() / 7),
         weekStart,
         days: orderedDays,
       })
@@ -588,15 +383,18 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
     }
   }
 
-  if (loading) return <p className="text-sm text-gray-400">Cargando microciclo...</p>
+  if (loading) return <p className="text-sm text-gray-400 py-6">Cargando microciclo...</p>
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-dj-600">
-          <ChevronLeft size={16}/> Volver
+          <ChevronLeft size={16}/> Volver al año
         </button>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" icon={<Share2 size={15}/>} onClick={() => setShowShare(true)}>
+            Compartir
+          </Button>
           <Button variant="secondary" size="sm" icon={<FileDown size={15}/>} loading={exporting} onClick={handleExport}>
             PDF
           </Button>
@@ -608,10 +406,10 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
 
       <div className="bg-dj-800 rounded-2xl px-5 py-3">
         <h2 className="text-white font-bold font-display text-lg">
-          MESOCICLO {mesocycle.number} | MICROCICLO {microcycle.number}
+          Microciclo semanal
         </h2>
         <p className="text-white/60 text-xs mt-0.5">
-          {format(weekStart, "d 'de' MMMM", { locale: es })} – {format(weekDates[6], "d 'de' MMMM yyyy", { locale: es })}
+          {format(weekStart, "d 'de' MMMM", { locale: es })} – {format(weekEnd, "d 'de' MMMM yyyy", { locale: es })}
         </p>
       </div>
 
@@ -629,15 +427,25 @@ function MicrocycleEditor({ microcycle, mesocycle, onBack, onToast }: {
               onAddMoment={() => handleAddMoment(key)}
               onRemoveMoment={id => handleRemoveMoment(key, id)}
               onMomentChange={(id, v) => handleMomentChange(key, id, v)}
+              onMomentCategory={(id, c) => handleMomentCategory(key, id, c)}
             />
           )
         })}
       </div>
+
+      {showShare && (
+        <ShareModal
+          macrocycleId={macro.id}
+          weekStart={weekStart}
+          onClose={() => setShowShare(false)}
+          onToast={onToast}
+        />
+      )}
     </div>
   )
 }
 
-function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMoment, onMomentChange }: {
+function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory }: {
   label: string
   date: Date
   day: MicrocycleDay
@@ -645,9 +453,9 @@ function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMomen
   onAddMoment: () => void
   onRemoveMoment: (id: string) => void
   onMomentChange: (id: string, v: string) => void
+  onMomentCategory: (id: string, c: ContentCategory | null) => void
 }) {
   const sortedMoments = [...day.moments].sort((a, b) => a.order - b.order)
-  const isMatch = day.day_label?.toLowerCase().includes('vs') || day.rival_logo_url
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -661,10 +469,7 @@ function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMomen
           value={day.day_label ?? ''}
           onChange={e => onLabelChange(e.target.value)}
           placeholder="Ej: Sesión físico"
-          className={clsx(
-            'w-full text-xs font-bold text-center rounded-xl px-2 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-dj-400',
-            isMatch ? 'bg-gold-100 text-gold-800' : 'bg-amber-50 text-amber-800',
-          )}
+          className="w-full text-xs font-bold text-center rounded-xl px-2 py-2 mb-2 bg-amber-50 text-amber-800 focus:outline-none focus:ring-2 focus:ring-dj-400"
         />
       </div>
 
@@ -675,6 +480,7 @@ function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMomen
             index={i}
             moment={m}
             onChange={v => onMomentChange(m.id, v)}
+            onCategory={c => onMomentCategory(m.id, c)}
             onRemove={() => onRemoveMoment(m.id)}
           />
         ))}
@@ -690,42 +496,95 @@ function DayColumn({ label, date, day, onLabelChange, onAddMoment, onRemoveMomen
   )
 }
 
-function MomentBlock({ index, moment, onChange, onRemove }: {
+function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
   index: number
   moment: MicrocycleMoment
   onChange: (v: string) => void
+  onCategory: (c: ContentCategory | null) => void
   onRemove: () => void
 }) {
+  const [showCatPicker, setShowCatPicker] = useState(false)
+  const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-dj-100 text-dj-900'
+
   return (
-    <div className="bg-dj-100 rounded-xl px-2.5 py-2 group relative">
+    <div className={clsx('rounded-xl px-2.5 py-2 group relative', colorClass)}>
       <div className="flex items-start gap-1.5">
-        <span className="text-[10px] font-bold text-dj-700 mt-0.5 shrink-0">M{index + 1}:</span>
+        <span className="text-[10px] font-bold mt-0.5 shrink-0 opacity-80">M{index + 1}:</span>
         <textarea
           value={moment.content}
           onChange={e => onChange(e.target.value)}
           placeholder="Contenido..."
           rows={2}
-          className="flex-1 bg-transparent text-xs font-semibold text-dj-900 resize-none focus:outline-none placeholder:text-dj-400 placeholder:font-normal"
+          className="flex-1 bg-transparent text-xs font-semibold resize-none focus:outline-none placeholder:opacity-50 placeholder:font-normal"
         />
         <button
           onClick={onRemove}
-          className="opacity-0 group-hover:opacity-100 text-dj-400 hover:text-red-500 transition-opacity shrink-0"
+          className="opacity-0 group-hover:opacity-100 hover:text-red-200 transition-opacity shrink-0"
         >
           <X size={12}/>
         </button>
       </div>
+
+      <button
+        onClick={() => setShowCatPicker(!showCatPicker)}
+        className="text-[9px] font-bold mt-1 underline opacity-80 hover:opacity-100"
+      >
+        {moment.category ? CONTENT_SHORT[moment.category] : 'Elegir categoría'}
+      </button>
+
+      {showCatPicker && (
+        <div className="absolute z-10 top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 p-1.5 w-44">
+          {CONTENT_CATEGORIES.map(c => (
+            <button
+              key={c}
+              onClick={() => { onCategory(c); setShowCatPicker(false) }}
+              className={clsx('w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5', CONTENT_COLOR[c])}
+            >
+              {CONTENT_SHORT[c]}
+            </button>
+          ))}
+          <button
+            onClick={() => { onCategory(null); setShowCatPicker(false) }}
+            className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
+          >
+            Sin categoría
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Modal genérico para formularios de creación
+// MODAL DE COMPARTIR (link público de solo lectura)
 // ════════════════════════════════════════════════════════════════════════════
-function FormModal({ title, onClose, children }: {
-  title: string
+function ShareModal({ macrocycleId, weekStart, onClose, onToast }: {
+  macrocycleId: string
+  weekStart: Date
   onClose: () => void
-  children: React.ReactNode
+  onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
+  const { profile } = useAppStore()
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!profile) return
+    getOrCreateShareLink(macrocycleId, format(weekStart, 'yyyy-MM-dd'), profile.id)
+      .then(shared => setUrl(buildShareUrl(shared.token)))
+      .catch(() => onToast({ msg: 'Error al generar el link.', type: 'error' }))
+      .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleCopy() {
+    if (!url) return
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
@@ -733,12 +592,33 @@ function FormModal({ title, onClose, children }: {
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">{title}</h3>
+          <h3 className="font-bold text-gray-900">Compartir microciclo</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
             <X size={18}/>
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-gray-500">
+            Cualquiera con este link puede ver esta semana, sin necesidad de iniciar sesión.
+          </p>
+          {loading ? (
+            <p className="text-sm text-gray-400">Generando link...</p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={url ?? ''}
+                className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 bg-gray-50 text-gray-600"
+              />
+              <button
+                onClick={handleCopy}
+                className="shrink-0 bg-dj-600 text-white rounded-xl px-3 py-2 hover:bg-dj-700 transition-colors"
+              >
+                {copied ? <Check size={15}/> : <Copy size={15}/>}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
