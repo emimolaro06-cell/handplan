@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, BookOpen, Dumbbell,
-  LogOut, Menu, X, ChevronRight, CalendarDays, ShieldCheck,
+  LogOut, Menu, X, ChevronRight, CalendarDays,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -10,12 +10,11 @@ import { TEAM_CATEGORY_BG, CLUB_NAME } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
 
 const NAV = [
-  { to: '/',              icon: LayoutDashboard, label: 'Inicio',               adminOnly: false },
-  { to: '/crear',         icon: PlusCircle,      label: 'Crear entrenamiento',  adminOnly: false },
-  { to: '/biblioteca',    icon: BookOpen,         label: 'Biblioteca',           adminOnly: false },
-  { to: '/ejercicios',    icon: Dumbbell,         label: 'Ejercicios',           adminOnly: false },
-  { to: '/planificacion', icon: CalendarDays,     label: 'Planificación mensual',adminOnly: false },
-  { to: '/admin',         icon: ShieldCheck,      label: 'Administrador',        adminOnly: true  },
+  { to: '/menu',          icon: LayoutDashboard, label: 'Inicio' },
+  { to: '/crear',         icon: PlusCircle,      label: 'Crear entrenamiento' },
+  { to: '/biblioteca',    icon: BookOpen,         label: 'Biblioteca' },
+  { to: '/ejercicios',    icon: Dumbbell,         label: 'Ejercicios' },
+  { to: '/planificacion', icon: CalendarDays,     label: 'Planificación mensual' },
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,8 +28,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const initials = profile?.full_name
     .split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() ?? 'DJ'
-
-  const visibleNav = NAV.filter(n => !n.adminOnly || profile?.role === 'admin')
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -61,7 +58,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Categorías */}
-        {profile && profile.role !== 'admin' && (
+        {profile && (
           <div className="px-4 py-4 border-b border-white/10">
             <p className="text-xs text-white/40 uppercase tracking-wider mb-2 px-1">Mi categoría</p>
             <div className="space-y-1">
@@ -83,27 +80,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Admin badge */}
-        {profile?.role === 'admin' && (
-          <div className="px-4 py-3 border-b border-white/10">
-            <div className="flex items-center gap-2 bg-gold-400/20 rounded-xl px-3 py-2">
-              <ShieldCheck size={14} className="text-gold-400"/>
-              <span className="text-gold-400 text-xs font-bold">Administrador</span>
-            </div>
-          </div>
-        )}
-
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {visibleNav.map(({ to, icon: Icon, label, adminOnly }) => (
-            <NavLink key={to} to={to} end={to === '/'}
+          {NAV.map(({ to, icon: Icon, label }) => (
+            <NavLink key={to} to={to}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors',
-                adminOnly ? 'mt-2 border border-gold-400/20' : '',
                 isActive
-                  ? adminOnly ? 'bg-gold-400/20 text-gold-300 font-semibold' : 'bg-gold-400/20 text-gold-300 font-semibold'
-                  : adminOnly ? 'text-gold-400/70 hover:text-gold-300 hover:bg-gold-400/10' : 'text-white/60 hover:text-white hover:bg-white/10',
+                  ? 'bg-gold-400/20 text-gold-300 font-semibold'
+                  : 'text-white/60 hover:text-white hover:bg-white/10',
               )}>
               <Icon size={17}/>
               {label}
