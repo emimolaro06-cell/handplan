@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
@@ -7,10 +7,11 @@ import {
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { uploadImage, addExerciseLabel, deleteExerciseLabel } from '@/lib/supabase'
-import { EXERCISE_CATEGORIES } from '@/lib/constants'
+import { listSubcontents, addSubcontent } from '@/lib/subcontents'
+import { EXERCISE_CATEGORIES, CONTENT_CATEGORIES } from '@/lib/constants'
 import { Select, Textarea, Input, Button, Modal, Toast } from '@/components/ui/index'
 import { TacticalBoard } from '@/components/training/TacticalBoard'
-import type { Moment, ExerciseLabel } from '@/types'
+import type { Moment, ExerciseLabel, ContentCategory, Subcontent } from '@/types'
 
 interface Props {
   moment: Moment
@@ -25,6 +26,14 @@ interface Props {
   userId: string
 }
 
+const CONTENT_SHORT: Record<ContentCategory, string> = {
+  'Técnica individual OFENSIVA':  'Téc. Ind. Ofensiva',
+  'Técnica individual DEFENSIVA': 'Téc. Ind. Defensiva',
+  'Táctica OFENSIVA':  'Táctica Ofensiva',
+  'Táctica DEFENSIVA': 'Táctica Defensiva',
+  'MIXTO': 'Mixto',
+}
+
 export function MomentCard({
   moment, index, total, exerciseLabels, onLabelsChange,
   onChange, onRemove, onMoveUp, onMoveDown, userId,
@@ -36,6 +45,15 @@ export function MomentCard({
   const [newLabel, setNewLabel]           = useState('')
   const [toast, setToast]                 = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Subcontenidos personalizados (para estadísticas del Macrociclo)
+  const [subcontents, setSubcontents] = useState<Subcontent[]>([])
+  const [newSubLabel, setNewSubLabel] = useState('')
+  const [addingSub, setAddingSub]     = useState(false)
+
+  useEffect(() => {
+    listSubcontents(userId).then(setSubcontents).catch(() => {})
+  }, [userId])
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: moment.id })
@@ -83,11 +101,40 @@ export function MomentCard({
     onLabelsChange(exerciseLabels.filter(l => l.id !== id))
   }
 
+  function handleContentCategoryChange(value: string) {
+    const category = (value || null) as ContentCategory | null
+    onChange({ ...moment, content_category: category, subcontent_id: null })
+  }
+
+  async function handleCreateSub() {
+    if (!moment.content_category || !newSubLabel.trim()) return
+    setAddingSub(true)
+    try {
+      const created = await addSubcontent(userId, moment.content_category, newSubLabel.trim())
+      setSubcontents(prev => [...prev, created])
+      update('subcontent_id', created.id)
+      setNewSubLabel('')
+    } catch {
+      setToast({ msg: 'Error al crear el subcontenido.', type: 'error' })
+    } finally {
+      setAddingSub(false)
+    }
+  }
+
   const catOptions   = EXERCISE_CATEGORIES.map(c => ({ value: c, label: c }))
   const labelOptions = [
     { value: '', label: '— Seleccioná un ejercicio —' },
     ...exerciseLabels.map(l => ({ value: l.label, label: l.label })),
   ]
+
+  const contentCatOptions = [
+    { value: '', label: 'Sin categoría general' },
+    ...CONTENT_CATEGORIES.map(c => ({ value: c, label: CONTENT_SHORT[c] })),
+  ]
+
+  const subOptions = moment.content_category
+    ? subcontents.filter(s => s.category === moment.content_category)
+    : []
 
   return (
     <>
@@ -201,6 +248,44 @@ export function MomentCard({
                 )}
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload}/>
               </div>
+            </div>
+
+            {/* Categoría general (para estadísticas del Macrociclo) + Subcontenido */}
+            <div className="bg-dj-50/40 rounded-xl p-3 border border-dj-100 space-y-2.5">
+              <p className="text-xs font-semibold text-dj-700">
+                Estadísticas (opcional) — para el radar y torta del Macrociclo
+              </p>
+              <Select
+                label="Categoría general"
+                options={contentCatOptions}
+                value={moment.content_category ?? ''}
+                onChange={e => handleContentCategoryChange(e.target.value)}
+              />
+              {moment.content_category && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">Subcontenido</label>
+                  <select
+                    value={moment.subcontent_id ?? ''}
+                    onChange={e => update('subcontent_id', e.target.value || null)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-dj-400 hover:border-gray-300 transition-colors mb-2"
+                  >
+                    <option value="">— Sin subcontenido —</option>
+                    {subOptions.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <input
+                      value={newSubLabel}
+                      onChange={e => setNewSubLabel(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleCreateSub()}
+                      placeholder="Ej: Dribling, Pase y recepción..."
+                      className="flex-1 rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                    />
+                    <Button size="sm" icon={<Plus size={13}/>} loading={addingSub} disabled={!newSubLabel.trim()} onClick={handleCreateSub}>
+                      Nuevo
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Textarea
