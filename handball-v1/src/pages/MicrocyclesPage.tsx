@@ -17,12 +17,13 @@ import {
   getOrCreateMacrocycle, updateMacrocycle,
   listDaysInMonth, listAllDays, listDaysInWeek,
   upsertMicrocycleDay, computeContentStats, getWeeksInMonth,
-  addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory,
+  addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory, updateMomentSubcontent,
   getOrCreateShareLink, buildShareUrl, uploadDayImage,
 } from '@/lib/cycles'
+import { listSubcontents, addSubcontent } from '@/lib/subcontents'
 import { downloadMicrocyclePDF } from '@/lib/pdfMicrocycle'
 import type {
-  Macrocycle, MicrocycleDay, MicrocycleMoment, TeamCategory, ContentCategory,
+  Macrocycle, MicrocycleDay, MicrocycleMoment, TeamCategory, ContentCategory, Subcontent,
 } from '@/types'
 
 type Level = 'macro' | 'editor'
@@ -286,6 +287,9 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [subcontents, setSubcontents] = useState<Subcontent[]>([])
+
+  const { profile } = useAppStore()
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -293,6 +297,18 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
     return d
   })
   const weekEnd = weekDates[6]
+
+  useEffect(() => {
+    if (!profile) return
+    listSubcontents(profile.id).then(setSubcontents).catch(() => {})
+  }, [profile])
+
+  async function handleAddSubcontent(category: ContentCategory, label: string) {
+    if (!profile) return
+    const created = await addSubcontent(profile.id, category, label)
+    setSubcontents(prev => [...prev, created])
+    return created
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -351,6 +367,11 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   function handleMomentCategory(dateKey: string, momentId: string, category: ContentCategory | null) {
     const day = getDay(dateKey)
     patchDay(dateKey, { moments: updateMomentCategory(day.moments, momentId, category) })
+  }
+
+  function handleMomentSubcontent(dateKey: string, momentId: string, subcontentId: string | null) {
+    const day = getDay(dateKey)
+    patchDay(dateKey, { moments: updateMomentSubcontent(day.moments, momentId, subcontentId) })
   }
 
   async function handleImageUpload(dateKey: string, file: File) {
@@ -456,6 +477,9 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
               onRemoveMoment={id => handleRemoveMoment(key, id)}
               onMomentChange={(id, v) => handleMomentChange(key, id, v)}
               onMomentCategory={(id, c) => handleMomentCategory(key, id, c)}
+              onMomentSubcontent={(id, s) => handleMomentSubcontent(key, id, s)}
+              subcontents={subcontents}
+              onAddSubcontent={handleAddSubcontent}
               onImageUpload={file => handleImageUpload(key, file)}
               onImageRemove={() => handleImageRemove(key)}
             />
@@ -478,7 +502,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
 // ════════════════════════════════════════════════════════════════════════════
 // COLUMNA DEL DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory, onImageUpload, onImageRemove }: {
+function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory, onMomentSubcontent, subcontents, onAddSubcontent, onImageUpload, onImageRemove }: {
   label: string
   date: Date
   day: MicrocycleDay
@@ -488,6 +512,9 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
   onRemoveMoment: (id: string) => void
   onMomentChange: (id: string, v: string) => void
   onMomentCategory: (id: string, c: ContentCategory | null) => void
+  onMomentSubcontent: (id: string, s: string | null) => void
+  subcontents: Subcontent[]
+  onAddSubcontent: (category: ContentCategory, label: string) => Promise<Subcontent | undefined>
   onImageUpload: (file: File) => void
   onImageRemove: () => void
 }) {
@@ -581,6 +608,9 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
               moment={m}
               onChange={v => onMomentChange(m.id, v)}
               onCategory={c => onMomentCategory(m.id, c)}
+              onSubcontent={s => onMomentSubcontent(m.id, s)}
+              subcontents={subcontents}
+              onAddSubcontent={onAddSubcontent}
               onRemove={() => onRemoveMoment(m.id)}
             />
           ))}
@@ -599,17 +629,25 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
 // ════════════════════════════════════════════════════════════════════════════
 // BLOQUE DE MOMENTO
 // ════════════════════════════════════════════════════════════════════════════
-function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
+function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcontents, onAddSubcontent, onRemove }: {
   index: number
   moment: MicrocycleMoment
   onChange: (v: string) => void
   onCategory: (c: ContentCategory | null) => void
+  onSubcontent: (s: string | null) => void
+  subcontents: Subcontent[]
+  onAddSubcontent: (category: ContentCategory, label: string) => Promise<Subcontent | undefined>
   onRemove: () => void
 }) {
   const [showCatPicker, setShowCatPicker] = useState(false)
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null)
+  const [newSubLabel, setNewSubLabel] = useState('')
+  const [addingSub, setAddingSub] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-dj-100 text-dj-900'
+
+  const subOptions = moment.category ? subcontents.filter(s => s.category === moment.category) : []
+  const currentSub = subcontents.find(s => s.id === moment.subcontent_id)
 
   function openPicker() {
     const rect = triggerRef.current?.getBoundingClientRect()
@@ -617,6 +655,15 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
       setPickerPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX })
     }
     setShowCatPicker(true)
+  }
+
+  async function handleCreateSub() {
+    if (!moment.category || !newSubLabel.trim()) return
+    setAddingSub(true)
+    const created = await onAddSubcontent(moment.category, newSubLabel.trim())
+    setAddingSub(false)
+    setNewSubLabel('')
+    if (created) onSubcontent(created.id)
   }
 
   return (
@@ -644,20 +691,26 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
         className="text-[9px] font-bold mt-1 underline opacity-80 hover:opacity-100"
       >
         {moment.category ? CONTENT_SHORT[moment.category] : 'Elegir categoría'}
+        {currentSub ? ` · ${currentSub.label}` : ''}
       </button>
 
       {showCatPicker && pickerPos && createPortal(
         <>
           <div className="fixed inset-0 z-[90]" onClick={() => setShowCatPicker(false)}/>
           <div
-            className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-44"
+            className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-52"
             style={{ top: pickerPos.top, left: pickerPos.left }}
           >
+            <p className="text-[9px] font-bold text-gray-400 uppercase px-2 pt-1 pb-0.5">Categoría general</p>
             {CONTENT_CATEGORIES.map(c => (
               <button
                 key={c}
-                onClick={() => { onCategory(c); setShowCatPicker(false) }}
-                className={clsx('w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5', CONTENT_COLOR[c])}
+                onClick={() => onCategory(c)}
+                className={clsx(
+                  'w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5 flex items-center justify-between',
+                  CONTENT_COLOR[c],
+                  moment.category === c ? 'ring-2 ring-offset-1 ring-gray-300' : '',
+                )}
               >
                 {CONTENT_SHORT[c]}
               </button>
@@ -667,6 +720,53 @@ function MomentBlock({ index, moment, onChange, onCategory, onRemove }: {
               className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
             >
               Sin categoría
+            </button>
+
+            {moment.category && (
+              <>
+                <div className="border-t border-gray-100 my-1.5"/>
+                <p className="text-[9px] font-bold text-gray-400 uppercase px-2 pb-0.5">Subcontenido</p>
+                <div className="max-h-32 overflow-y-auto space-y-0.5 mb-1.5">
+                  {subOptions.length === 0 && (
+                    <p className="text-[10px] text-gray-300 px-2 py-1">Sin subcontenidos todavía.</p>
+                  )}
+                  {subOptions.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => onSubcontent(s.id)}
+                      className={clsx(
+                        'w-full text-left text-[10px] px-2 py-1.5 rounded-lg',
+                        moment.subcontent_id === s.id ? 'bg-gray-100 font-bold text-gray-800' : 'text-gray-600 hover:bg-gray-50',
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1 px-1 pb-1">
+                  <input
+                    value={newSubLabel}
+                    onChange={e => setNewSubLabel(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateSub()}
+                    placeholder="Nuevo subcontenido..."
+                    className="flex-1 text-[10px] rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-dj-400"
+                  />
+                  <button
+                    onClick={handleCreateSub}
+                    disabled={addingSub || !newSubLabel.trim()}
+                    className="shrink-0 bg-dj-600 text-white rounded-lg px-2 disabled:opacity-40"
+                  >
+                    <Plus size={11}/>
+                  </button>
+                </div>
+              </>
+            )}
+
+            <button
+              onClick={() => setShowCatPicker(false)}
+              className="w-full text-center text-[10px] font-bold text-dj-600 hover:bg-dj-50 rounded-lg py-1.5 mt-1"
+            >
+              Listo
             </button>
           </div>
         </>,
