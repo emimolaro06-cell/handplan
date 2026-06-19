@@ -184,7 +184,7 @@ export function updateMomentSubcontent(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ESTADÍSTICAS — conteo de categorías para el gráfico de radar anual
+// ESTADÍSTICAS — combina Momentos de Microciclos + Momentos de Entrenamientos
 // ════════════════════════════════════════════════════════════════════════════
 
 const EMPTY_STATS: ContentCategoryStats = {
@@ -195,16 +195,76 @@ const EMPTY_STATS: ContentCategoryStats = {
   'MIXTO': 0,
 }
 
-export function computeContentStats(days: MicrocycleDay[]): ContentCategoryStats {
-  const stats: ContentCategoryStats = { ...EMPTY_STATS }
-  for (const day of days) {
-    for (const moment of day.moments) {
-      if (moment.category) {
-        stats[moment.category] = (stats[moment.category] ?? 0) + 1
+// Un "momento contado" genérico, sea que venga de un microciclo o de un entrenamiento
+export interface CountedMoment {
+  category: ContentCategory
+  subcontent_id: string | null
+}
+
+// Trae los entrenamientos guardados del coach, cuya fecha cae dentro del macrociclo,
+// y devuelve sus Momentos que tengan categoría general asignada.
+export async function listTrainingMomentsForMacrocycle(
+  userId: string, macrocycleStart: string,
+): Promise<CountedMoment[]> {
+  const { data: sessions, error } = await supabase
+    .from('training_sessions')
+    .select('id, moments(content_category, subcontent_id)')
+    .eq('user_id', userId)
+    .eq('status', 'saved')
+    .gte('session_date', macrocycleStart)
+  if (error) throw error
+
+  const result: CountedMoment[] = []
+  for (const session of (sessions ?? []) as any[]) {
+    for (const m of session.moments ?? []) {
+      if (m.content_category) {
+        result.push({ category: m.content_category, subcontent_id: m.subcontent_id ?? null })
       }
     }
   }
+  return result
+}
+
+// Convierte los días de microciclos a la misma forma genérica que los de entrenamientos
+function microcycleDaysToCountedMoments(days: MicrocycleDay[]): CountedMoment[] {
+  const result: CountedMoment[] = []
+  for (const day of days) {
+    for (const moment of day.moments) {
+      if (moment.category) {
+        result.push({ category: moment.category, subcontent_id: moment.subcontent_id ?? null })
+      }
+    }
+  }
+  return result
+}
+
+// Stats para el gráfico de RADAR (las 5 categorías generales), combinando ambas fuentes
+export function computeContentStats(days: MicrocycleDay[], trainingMoments: CountedMoment[] = []): ContentCategoryStats {
+  const stats: ContentCategoryStats = { ...EMPTY_STATS }
+  const all = [...microcycleDaysToCountedMoments(days), ...trainingMoments]
+  for (const m of all) {
+    stats[m.category] = (stats[m.category] ?? 0) + 1
+  }
   return stats
+}
+
+// Stats para el gráfico de TORTA: desglose de subcontenidos dentro de UNA categoría puntual
+export interface SubcontentStat {
+  subcontent_id: string | null
+  count: number
+}
+
+export function computeSubcontentStats(
+  days: MicrocycleDay[], trainingMoments: CountedMoment[], category: ContentCategory,
+): SubcontentStat[] {
+  const all = [...microcycleDaysToCountedMoments(days), ...trainingMoments]
+  const counts = new Map<string | null, number>()
+  for (const m of all) {
+    if (m.category !== category) continue
+    const key = m.subcontent_id
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return Array.from(counts.entries()).map(([subcontent_id, count]) => ({ subcontent_id, count }))
 }
 
 // ════════════════════════════════════════════════════════════════════════════
