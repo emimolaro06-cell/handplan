@@ -15,7 +15,6 @@ import { ExercisesPage }         from '@/pages/ExercisesPage'
 import { MonthlyPlanPage }       from '@/pages/MonthlyPlanPage'
 import { SharedSessionPage }     from '@/pages/SharedSessionPage'
 import { SharedMicrocyclePage }  from '@/pages/SharedMicrocyclePage'
-import { AdminPage }             from '@/pages/AdminPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -58,7 +57,6 @@ export default function App() {
         {/* Auth */}
         <Route path="/categoria" element={<AuthGuard><CategoryPage/></AuthGuard>}/>
         <Route path="/menu"      element={<CategoryGuard><MenuPage/></CategoryGuard>}/>
-        <Route path="/admin"     element={<AuthGuard><AppLayout><AdminPage/></AppLayout></AuthGuard>}/>
 
         {/* App */}
         <Route path="/crear"             element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
