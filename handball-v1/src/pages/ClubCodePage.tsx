@@ -1,17 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, Users, UserPlus } from 'lucide-react'
 import { CLUB_CODE, CLUB_NAME } from '@/lib/constants'
+import { useAppStore } from '@/lib/store'
+
+const CLUB_CODE_STORAGE_KEY = 'dyj_club_code_verified'
 
 export function ClubCodePage() {
   const navigate = useNavigate()
+  const { profile } = useAppStore()
   const [code, setCode] = useState('')
   const [error, setError] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
 
+  useEffect(() => {
+    // Si ya hay una sesión de perfil activa, no tiene sentido mostrar esta pantalla: directo al menú
+    if (profile) {
+      navigate('/menu', { replace: true })
+      return
+    }
+    // Si el código ya fue verificado antes en este dispositivo, saltar directo a las opciones
+    if (localStorage.getItem(CLUB_CODE_STORAGE_KEY) === 'true') {
+      setUnlocked(true)
+    }
+  }, [profile, navigate])
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (code.trim().toUpperCase() === CLUB_CODE) {
+      localStorage.setItem(CLUB_CODE_STORAGE_KEY, 'true')
       setUnlocked(true)
       setError(false)
     } else {
