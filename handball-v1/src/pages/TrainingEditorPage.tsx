@@ -161,14 +161,12 @@ export function TrainingEditorPage() {
     await downloadTrainingPDF(session)
   }
 
-  async function onPreview(formData: SessionFormData) {
-    const s = await save(formData)
-    if (!s) return
+  function onPreview(formData: SessionFormData) {
     const session: TrainingSession = {
       ...(formData as SessionFormData),
-      id: s.id ?? sessionId ?? 'preview', user_id: profile?.id ?? '',
+      id: sessionId ?? 'preview', user_id: profile?.id ?? '',
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: s.id ?? '' })),
+      moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
     setPreviewSession(session)
     setShowPreview(true)
