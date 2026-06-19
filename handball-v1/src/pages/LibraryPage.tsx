@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, Eye, Edit, Copy, FileDown, Trash2,
-  BookOpen, SlidersHorizontal, X, Calendar,
+  BookOpen, SlidersHorizontal, X, Calendar, AlertTriangle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
+import { supabase } from '@/lib/supabase'
 import { getSessions, deleteSession, duplicateSession, getAllCoaches } from '@/lib/supabase'
 import { downloadTrainingPDF } from '@/lib/pdf'
 import { Card, Button, Spinner, Empty, Toast, Select, Modal } from '@/components/ui/index'
@@ -27,6 +28,11 @@ export function LibraryPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [preview,     setPreview]     = useState<TrainingSession | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
+
+  // Borrado masivo
+  const [showDeleteAll, setShowDeleteAll] = useState(false)
+  const [deletingAll, setDeletingAll]     = useState(false)
+  const [totalOwnSessions, setTotalOwnSessions] = useState(0)
 
   useEffect(() => {
     if (!profile) return
@@ -48,6 +54,16 @@ export function LibraryPage() {
     })
   }, [profile, filters])
 
+  // Conteo total de TODAS mis sesiones (sin filtros), para el modal de borrado masivo
+  useEffect(() => {
+    if (!profile) return
+    supabase
+      .from('training_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', profile.id)
+      .then(({ count }) => setTotalOwnSessions(count ?? 0))
+  }, [profile, sessions])
+
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este entrenamiento? No se puede deshacer.')) return
     const { error } = await deleteSession(id)
@@ -64,6 +80,18 @@ export function LibraryPage() {
     setTimeout(() => navigate(`/entrenamiento/${data.id}`), 800)
   }
 
+  async function handleDeleteAll() {
+    if (!profile) return
+    setDeletingAll(true)
+    const { error } = await supabase.from('training_sessions').delete().eq('user_id', profile.id)
+    setDeletingAll(false)
+    setShowDeleteAll(false)
+    if (error) { setToast({ msg: 'Error al borrar las sesiones.', type: 'error' }); return }
+    setSessions([])
+    setTotalOwnSessions(0)
+    setToast({ msg: 'Todas tus sesiones fueron eliminadas.', type: 'success' })
+  }
+
   function setFilter<K extends keyof LibraryFilters>(key: K, val: LibraryFilters[K]) {
     setFilters(p => ({ ...p, [key]: val }))
   }
@@ -78,21 +106,32 @@ export function LibraryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 font-display">Biblioteca</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {sessions.length} entrenamiento{sessions.length !== 1 ? 's' : ''} guardado{sessions.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button
-          variant={activeFiltersCount > 0 ? 'primary' : 'secondary'}
-          size="sm"
-          icon={<SlidersHorizontal size={15}/>}
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          Filtros {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Trash2 size={15}/>}
+            className="text-red-400 hover:text-red-600 hover:bg-red-50"
+            onClick={() => setShowDeleteAll(true)}
+          >
+            Borrar todas mis sesiones
+          </Button>
+          <Button
+            variant={activeFiltersCount > 0 ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<SlidersHorizontal size={15}/>}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            Filtros {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+          </Button>
+        </div>
       </div>
 
       {/* Buscador */}
@@ -272,6 +311,40 @@ export function LibraryPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal: Confirmar borrado masivo */}
+      <Modal
+        open={showDeleteAll}
+        onClose={() => setShowDeleteAll(false)}
+        title="Borrar todas mis sesiones"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 bg-red-50 border border-red-100 rounded-xl p-4">
+            <AlertTriangle size={20} className="text-red-500 flex-shrink-0 mt-0.5"/>
+            <div>
+              <p className="text-sm font-bold text-red-700">Esta acción es irreversible.</p>
+              <p className="text-sm text-red-600 mt-1">
+                Vas a eliminar <span className="font-bold">{totalOwnSessions}</span> entrenamiento{totalOwnSessions !== 1 ? 's' : ''} guardado{totalOwnSessions !== 1 ? 's' : ''} y borrador{totalOwnSessions !== 1 ? 'es' : ''} (incluye sesiones que no ves en este listado por estar filtradas). No se puede deshacer.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDeleteAll(false)}
+              className="flex-1 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 rounded-xl py-2.5 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={deletingAll}
+              className="flex-1 text-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 rounded-xl py-2.5 transition-colors"
+            >
+              {deletingAll ? 'Borrando...' : 'Borrar todo'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
