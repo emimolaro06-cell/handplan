@@ -8,6 +8,7 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
+  PieChart, Pie, Cell, Tooltip, Legend,
 } from 'recharts'
 import { clsx } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -16,15 +17,16 @@ import { Button, Toast } from '@/components/ui/index'
 import {
   getOrCreateMacrocycle, updateMacrocycle,
   listDaysInMonth, listAllDays, listDaysInWeek,
-  upsertMicrocycleDay, computeContentStats, getWeeksInMonth,
+  upsertMicrocycleDay, computeContentStats, computeSubcontentStats, getWeeksInMonth,
   addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory, updateMomentSubcontent,
-  getOrCreateShareLink, buildShareUrl, uploadDayImage,
+  getOrCreateShareLink, buildShareUrl, uploadDayImage, listTrainingMomentsForMacrocycle,
 } from '@/lib/cycles'
 import { listSubcontents, addSubcontent } from '@/lib/subcontents'
 import { downloadMicrocyclePDF } from '@/lib/pdfMicrocycle'
 import type {
   Macrocycle, MicrocycleDay, MicrocycleMoment, TeamCategory, ContentCategory, Subcontent,
 } from '@/types'
+import type { CountedMoment } from '@/lib/cycles'
 
 type Level = 'macro' | 'editor'
 
@@ -112,7 +114,12 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [monthDays, setMonthDays] = useState<MicrocycleDay[]>([])
   const [allDays, setAllDays] = useState<MicrocycleDay[]>([])
+  const [trainingMoments, setTrainingMoments] = useState<CountedMoment[]>([])
   const [loadingMonth, setLoadingMonth] = useState(true)
+  const [subcontents, setSubcontents] = useState<Subcontent[]>([])
+  const [pieCategory, setPieCategory] = useState<ContentCategory | ''>('')
+
+  const { profile } = useAppStore()
 
   useEffect(() => {
     setLoadingMonth(true)
@@ -125,10 +132,32 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
     listAllDays(macro.id).then(setAllDays)
   }, [macro.id])
 
-  const stats = useMemo(() => computeContentStats(allDays), [allDays])
+  useEffect(() => {
+    if (!profile) return
+    listTrainingMomentsForMacrocycle(profile.id, macro.start_date).then(setTrainingMoments).catch(() => {})
+    listSubcontents(profile.id).then(setSubcontents).catch(() => {})
+  }, [profile, macro.id, macro.start_date])
+
+  const stats = useMemo(
+    () => computeContentStats(allDays, trainingMoments),
+    [allDays, trainingMoments],
+  )
   const radarData = CONTENT_CATEGORIES.map(c => ({ category: CONTENT_SHORT[c], value: stats[c] }))
   const hasAnyStats = Object.values(stats).some(v => v > 0)
   const weeks = useMemo(() => getWeeksInMonth(currentMonth), [currentMonth])
+
+  const pieData = useMemo(() => {
+    if (!pieCategory) return []
+    const subStats = computeSubcontentStats(allDays, trainingMoments, pieCategory)
+    return subStats.map(s => ({
+      name: s.subcontent_id
+        ? (subcontents.find(sc => sc.id === s.subcontent_id)?.label ?? 'Subcontenido eliminado')
+        : 'Sin subcontenido',
+      value: s.count,
+    }))
+  }, [pieCategory, allDays, trainingMoments, subcontents])
+
+  const PIE_COLORS = ['#1e8a1e', '#1d4ed8', '#f59e0b', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#65a30d']
 
   function weekHasContent(weekStart: Date, weekEnd: Date) {
     return monthDays.some(d => {
@@ -217,6 +246,55 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
                 <PolarRadiusAxis tick={{ fill: '#9ca3af', fontSize: 9 }}/>
                 <Radar dataKey="value" stroke="#1e8a1e" fill="#1e8a1e" fillOpacity={0.35}/>
               </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Gráfico de torta — desglose de subcontenidos por categoría */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 className="font-semibold text-gray-800 text-sm">Detalle de subcontenidos</h3>
+          <select
+            value={pieCategory}
+            onChange={e => setPieCategory(e.target.value as ContentCategory | '')}
+            className="text-sm rounded-xl border border-gray-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-dj-400"
+          >
+            <option value="">Elegí una categoría...</option>
+            {CONTENT_CATEGORIES.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        {!pieCategory ? (
+          <p className="text-gray-400 text-sm text-center py-8">
+            Elegí una categoría general arriba para ver el desglose de subcontenidos trabajados.
+          </p>
+        ) : pieData.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-8">
+            Todavía no hay Momentos categorizados como "{pieCategory}" con subcontenido asignado.
+          </p>
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]}/>
+                  ))}
+                </Pie>
+                <Tooltip/>
+                <Legend/>
+              </PieChart>
             </ResponsiveContainer>
           </div>
         )}
