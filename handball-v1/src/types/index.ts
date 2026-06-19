@@ -154,3 +154,13 @@ export interface SharedMicrocycle {
 
 // Conteo de categorías para el gráfico de radar del Macrociclo
 export type ContentCategoryStats = Record<ContentCategory, number>
+
+// ─── Comentarios del coordinador (admin) sobre un entrenamiento ──────────────
+export interface TrainingComment {
+  id: string
+  session_id: string
+  admin_id: string
+  comment: string
+  created_at: string
+  admin_name?: string  // se completa al hacer join con profiles, si corresponde
+}
