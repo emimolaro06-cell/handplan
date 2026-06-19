@@ -74,7 +74,7 @@ export function ProfilesPage() {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <button onClick={() => navigate('/')} className="text-white/60 hover:text-white">
+          <button onClick={() => navigate(-1)} className="text-white/60 hover:text-white">
             <ArrowLeft size={20}/>
           </button>
           <div>
