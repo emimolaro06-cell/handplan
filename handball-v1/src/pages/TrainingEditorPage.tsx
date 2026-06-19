@@ -10,17 +10,20 @@ import {
 } from '@dnd-kit/sortable'
 import {
   PlusCircle, Save, FileDown, ArrowLeft, AlertCircle,
-  BookmarkPlus, Eye, Share2, Copy, Check,
+  BookmarkPlus, Eye, Share2, Copy, Check, MessageSquare,
 } from 'lucide-react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { useForm } from 'react-hook-form'
 import { useAppStore } from '@/lib/store'
 import { createSession, updateSession, getSessionById, getExerciseLabels, createShareLink } from '@/lib/supabase'
+import { listTrainingComments } from '@/lib/comments'
 import { downloadTrainingPDF } from '@/lib/pdf'
 import { Input, Textarea, Select, Button, Card, Toast, Spinner } from '@/components/ui/index'
 import { MomentCard } from '@/components/training/MomentCard'
 import { PDFPreview } from '@/components/training/PDFPreview'
 import { TEAM_CATEGORIES, CONTENT_CATEGORIES } from '@/lib/constants'
-import type { Moment, SessionFormData, TrainingSession, ExerciseLabel } from '@/types'
+import type { Moment, SessionFormData, TrainingSession, ExerciseLabel, TrainingComment } from '@/types'
 
 function tmpId() { return `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}` }
 
@@ -54,6 +57,10 @@ export function TrainingEditorPage() {
   const [shareUrl, setShareUrl]   = useState<string | null>(null)
   const [sharing, setSharing]     = useState(false)
   const [copied, setCopied]       = useState(false)
+
+  // Comentarios del coordinador (solo lectura para el coach)
+  const [comments, setComments] = useState<TrainingComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -94,6 +101,13 @@ export function TrainingEditorPage() {
       setMoments([...s.moments].sort((a, b) => a.order_index - b.order_index))
       setSessionId(s.id)
       setLoading(false)
+
+      // Cargar comentarios del coordinador para este entrenamiento
+      setLoadingComments(true)
+      listTrainingComments(s.id)
+        .then(setComments)
+        .catch(() => {}) // si el coach no tiene permiso o falla, simplemente no se muestran
+        .finally(() => setLoadingComments(false))
     })
   }, [id, isEdit, navigate, reset])
 
@@ -274,6 +288,29 @@ export function TrainingEditorPage() {
             </div>
           )}
         </div>
+
+        {/* Comentarios del coordinador (solo lectura) */}
+        {isEdit && comments.length > 0 && (
+          <Card className="border-gold-200 bg-gold-50/30">
+            <h2 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <MessageSquare size={18} className="text-gold-600"/>
+              Comentarios del coordinador
+            </h2>
+            <div className="space-y-3">
+              {comments.map(c => (
+                <div key={c.id} className="bg-white rounded-xl border border-gold-100 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-gold-700">{c.admin_name}</span>
+                    <span className="text-xs text-gray-400">
+                      {format(new Date(c.created_at), "d MMM yyyy, HH:mm", { locale: es })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{c.comment}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Acciones */}
         <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
