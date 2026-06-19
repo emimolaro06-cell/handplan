@@ -54,6 +54,8 @@ export interface Moment {
   exercise_label: string
   duration_min: number
   exercise_category: ExerciseCategory
+  content_category: ContentCategory | null   // una de las 5 generales, para estadísticas del Macrociclo
+  subcontent_id: string | null               // subcontenido personalizado del profe, dentro de content_category
   image_url: string | null
   description: string
   observations: string
@@ -116,6 +118,7 @@ export interface MicrocycleMoment {
   order: number
   content: string
   category: ContentCategory | null
+  subcontent_id: string | null   // subcontenido personalizado del profe, dentro de category
 }
 
 export interface MicrocycleDay {
@@ -163,4 +166,13 @@ export interface TrainingComment {
   comment: string
   created_at: string
   admin_name?: string  // se completa al hacer join con profiles, si corresponde
+}
+
+// ─── Subcontenidos personalizados (por profe, dentro de cada categoría general) ──
+export interface Subcontent {
+  id: string
+  user_id: string
+  category: ContentCategory
+  label: string
+  created_at: string
 }
