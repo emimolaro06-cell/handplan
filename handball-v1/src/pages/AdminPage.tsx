@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, BarChart2, Edit2, Save, X, ChevronDown, ChevronUp,
-  Calendar, TrendingUp, Award, BookOpen,
+  Calendar, TrendingUp, Award, BookOpen, MessageSquare, Send, Trash2,
 } from 'lucide-react'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -11,7 +11,8 @@ import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { Card, Spinner, Toast, Badge } from '@/components/ui/index'
 import { TEAM_CATEGORIES, CONTENT_CATEGORIES, TEAM_CATEGORY_STYLES } from '@/lib/constants'
-import type { Profile, TeamCategory, ContentCategory } from '@/types'
+import { listTrainingComments, addTrainingComment, deleteTrainingComment } from '@/lib/comments'
+import type { Profile, TeamCategory, ContentCategory, TrainingComment } from '@/types'
 
 interface SessionRow {
   id: string
@@ -41,6 +42,9 @@ export function AdminPage() {
   const [editCats, setEditCats] = useState<TeamCategory[]>([])
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [statsRange, setStatsRange] = useState<'month' | 'year'>('month')
+
+  // Modal de comentarios sobre un entrenamiento puntual
+  const [commentingSession, setCommentingSession] = useState<SessionRow | null>(null)
 
   useEffect(() => {
     if (profile?.role !== 'admin') { navigate('/menu'); return }
@@ -230,12 +234,17 @@ export function AdminPage() {
                 {/* Entrenamientos recientes del coach */}
                 {!isEditing && coachSessions.length > 0 && (
                   <div className="px-4 pb-3 border-t border-gray-50 pt-2">
-                    <p className="text-xs text-gray-400 mb-1.5">Últimos entrenamientos:</p>
+                    <p className="text-xs text-gray-400 mb-1.5">Últimos entrenamientos (click para comentar):</p>
                     <div className="flex flex-wrap gap-1.5">
                       {coachSessions.slice(0, 5).map(s => (
-                        <span key={s.id} className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded-lg border border-gray-100">
+                        <button
+                          key={s.id}
+                          onClick={() => setCommentingSession(s)}
+                          className="text-xs bg-gray-50 hover:bg-gold-50 hover:border-gold-300 text-gray-600 px-2 py-1 rounded-lg border border-gray-100 transition-colors flex items-center gap-1"
+                        >
+                          <MessageSquare size={11} className="text-gray-400"/>
                           {s.team_category} · {format(new Date(s.session_date), 'd MMM', { locale: es })}
-                        </span>
+                        </button>
                       ))}
                       {coachSessions.length > 5 && (
                         <span className="text-xs text-gray-400">+{coachSessions.length - 5} más</span>
@@ -375,7 +384,130 @@ export function AdminPage() {
         </div>
       )}
 
+      {commentingSession && (
+        <CommentModal
+          session={commentingSession}
+          adminId={profile?.id ?? ''}
+          onClose={() => setCommentingSession(null)}
+          onToast={setToast}
+        />
+      )}
+
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MODAL DE COMENTARIOS — hilo de feedback del coordinador sobre un entrenamiento
+// ════════════════════════════════════════════════════════════════════════════
+function CommentModal({ session, adminId, onClose, onToast }: {
+  session: SessionRow
+  adminId: string
+  onClose: () => void
+  onToast: (t: { msg: string; type: 'success' | 'error' }) => void
+}) {
+  const [comments, setComments] = useState<TrainingComment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newComment, setNewComment] = useState('')
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    listTrainingComments(session.id)
+      .then(setComments)
+      .catch(() => onToast({ msg: 'Error al cargar comentarios.', type: 'error' }))
+      .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id])
+
+  async function handleSend() {
+    if (!newComment.trim()) return
+    setSending(true)
+    try {
+      const created = await addTrainingComment(session.id, adminId, newComment.trim())
+      setComments(prev => [...prev, created])
+      setNewComment('')
+      onToast({ msg: 'Comentario agregado.', type: 'success' })
+    } catch {
+      onToast({ msg: 'Error al agregar el comentario.', type: 'error' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteTrainingComment(id)
+      setComments(prev => prev.filter(c => c.id !== id))
+      onToast({ msg: 'Comentario eliminado.', type: 'success' })
+    } catch {
+      onToast({ msg: 'Error al eliminar.', type: 'error' })
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-900">Comentarios del coordinador</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {session.team_category} · {format(new Date(session.session_date), 'd MMM yyyy', { locale: es })} · {session.coach_name}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+            <X size={18}/>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {loading ? (
+            <p className="text-sm text-gray-400 text-center py-6">Cargando...</p>
+          ) : comments.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Todavía no hay comentarios en este entrenamiento.</p>
+          ) : (
+            comments.map(c => (
+              <div key={c.id} className="bg-gold-50 rounded-xl border border-gold-100 p-3 group relative">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-gold-700">{c.admin_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">
+                      {format(new Date(c.created_at), "d MMM, HH:mm", { locale: es })}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-700">{c.comment}</p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 p-4 flex gap-2">
+          <textarea
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            placeholder="Escribí un comentario de feedback para el entrenador..."
+            rows={2}
+            className="flex-1 text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !newComment.trim()}
+            className="shrink-0 bg-dj-600 hover:bg-dj-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-4 transition-colors flex items-center justify-center"
+          >
+            <Send size={16}/>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
