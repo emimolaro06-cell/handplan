@@ -150,7 +150,7 @@ export async function deleteDayImage(macrocycleId: string, date: string, ext: st
 // ════════════════════════════════════════════════════════════════════════════
 
 export function newMoment(content = '', category: ContentCategory | null = null): MicrocycleMoment {
-  return { id: crypto.randomUUID(), order: 0, content, category }
+  return { id: crypto.randomUUID(), order: 0, content, category, subcontent_id: null }
 }
 
 export function addMomentToDay(moments: MicrocycleMoment[], content = ''): MicrocycleMoment[] {
@@ -173,7 +173,14 @@ export function updateMomentContent(
 export function updateMomentCategory(
   moments: MicrocycleMoment[], momentId: string, category: ContentCategory | null,
 ): MicrocycleMoment[] {
-  return moments.map(m => (m.id === momentId ? { ...m, category } : m))
+  // Al cambiar de categoría general, se limpia el subcontenido (pertenecía a la categoría anterior)
+  return moments.map(m => (m.id === momentId ? { ...m, category, subcontent_id: null } : m))
+}
+
+export function updateMomentSubcontent(
+  moments: MicrocycleMoment[], momentId: string, subcontentId: string | null,
+): MicrocycleMoment[] {
+  return moments.map(m => (m.id === momentId ? { ...m, subcontent_id: subcontentId } : m))
 }
 
 // ════════════════════════════════════════════════════════════════════════════
