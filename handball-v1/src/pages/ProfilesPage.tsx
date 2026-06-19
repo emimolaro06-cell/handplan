@@ -39,7 +39,7 @@ export function ProfilesPage() {
     const { data: fullProfile } = await getProfile(profile.id)
     if (fullProfile) {
       setProfile(fullProfile)
-      navigate(fullProfile.role === 'admin' ? '/admin' : '/categoria')
+      navigate('/categoria')
     }
   }
 
