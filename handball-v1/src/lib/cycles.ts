@@ -9,6 +9,29 @@ import type {
 // MACROCICLOS
 // ════════════════════════════════════════════════════════════════════════════
 
+export async function listMacrocycles(userId: string, teamCategory: TeamCategory): Promise<Macrocycle[]> {
+  const { data, error } = await supabase
+    .from('macrocycles')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('team_category', teamCategory)
+    .order('start_date', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Macrocycle[]
+}
+
+export async function createNewMacrocycle(
+  userId: string, teamCategory: TeamCategory, name: string, startDate: string,
+): Promise<Macrocycle> {
+  const { data, error } = await supabase
+    .from('macrocycles')
+    .insert({ user_id: userId, team_category: teamCategory, name, start_date: startDate })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Macrocycle
+}
+
 export async function getOrCreateMacrocycle(userId: string, teamCategory: TeamCategory) {
   const { data: existing, error: selectError } = await supabase
     .from('macrocycles')
