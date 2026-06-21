@@ -218,7 +218,6 @@ export async function listTrainingMomentsForMacrocycle(userId: string): Promise<
     .from('moments')
     .select('content_category, subcontent_id')
     .in('session_id', sessionIds)
-    .not('content_category', 'is', null)
   if (momentsError) throw momentsError
 
   return (moments ?? [])
