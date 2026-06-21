@@ -136,6 +136,7 @@ export function TrainingEditorPage() {
       exercise_label: m.exercise_label, duration_min: m.duration_min,
       exercise_category: m.exercise_category, image_url: m.image_url,
       description: m.description, observations: m.observations, order_index: i,
+      content_category: m.content_category ?? null, subcontent_id: m.subcontent_id ?? null,
     }))
     const sessionData = { ...formData, status }
     let result
