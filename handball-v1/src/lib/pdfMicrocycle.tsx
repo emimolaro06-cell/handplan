@@ -23,10 +23,10 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
 
 // Mismos colores que la pantalla, en hex (PDF no entiende clases de Tailwind)
 const CONTENT_PDF_COLOR: Record<ContentCategory, string> = {
-  'Técnica individual OFENSIVA':  '#166f16',
-  'Técnica individual DEFENSIVA': '#1d4ed8',
-  'Táctica OFENSIVA':  '#d97706',
-  'Táctica DEFENSIVA': '#7c3aed',
+  'Técnica individual OFENSIVA':  '#125712',
+  'Táctica OFENSIVA':  '#3da83d',
+  'Técnica individual DEFENSIVA': '#1e3a8a',
+  'Táctica DEFENSIVA': '#3b82f6',
   'MIXTO': '#4b5563',
 }
 
