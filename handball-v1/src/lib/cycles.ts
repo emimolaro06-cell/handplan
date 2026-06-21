@@ -204,22 +204,26 @@ export interface CountedMoment {
 // Trae los entrenamientos guardados del coach, cuya fecha cae dentro del macrociclo,
 // y devuelve sus Momentos que tengan categoría general asignada.
 export async function listTrainingMomentsForMacrocycle(userId: string): Promise<CountedMoment[]> {
-  const { data: sessions, error } = await supabase
+  const { data: sessions, error: sessionsError } = await supabase
     .from('training_sessions')
-    .select('id, moments(content_category, subcontent_id)')
+    .select('id')
     .eq('user_id', userId)
     .eq('status', 'saved')
-  if (error) throw error
+  if (sessionsError) throw sessionsError
 
-  const result: CountedMoment[] = []
-  for (const session of (sessions ?? []) as any[]) {
-    for (const m of session.moments ?? []) {
-      if (m.content_category) {
-        result.push({ category: m.content_category, subcontent_id: m.subcontent_id ?? null })
-      }
-    }
-  }
-  return result
+  const sessionIds = (sessions ?? []).map((s: any) => s.id)
+  if (sessionIds.length === 0) return []
+
+  const { data: moments, error: momentsError } = await supabase
+    .from('moments')
+    .select('content_category, subcontent_id')
+    .in('session_id', sessionIds)
+    .not('content_category', 'is', null)
+  if (momentsError) throw momentsError
+
+  return (moments ?? [])
+    .filter((m: any) => m.content_category)
+    .map((m: any) => ({ category: m.content_category, subcontent_id: m.subcontent_id ?? null }))
 }
 
 // Convierte los días de microciclos a la misma forma genérica que los de entrenamientos
