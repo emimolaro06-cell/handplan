@@ -123,9 +123,14 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
 
   const { profile } = useAppStore()
 
-  // Chequeo de la semana ACTUAL (hoy), independiente del mes que se esté navegando en el calendario
+  // Chequeo de la semana a avisar: si hoy es domingo, se adelanta a la semana que arranca mañana.
+  // Cualquier otro día, chequea la semana actual. Independiente del mes navegado en el calendario.
   useEffect(() => {
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+    const today = new Date()
+    const isSunday = today.getDay() === 0
+    const baseWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+    const weekStart = isSunday ? addDays(baseWeekStart, 7) : baseWeekStart
+
     setCurrentWeekStart(weekStart)
     listDaysInWeek(macro.id, weekStart)
       .then(days => {
@@ -208,7 +213,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
         <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
       </div>
 
-      {/* Banner: la semana actual todavía no tiene contenido cargado */}
+      {/* Banner: la semana actual (o entrante, si es domingo) todavía no tiene contenido cargado */}
       {currentWeekEmpty && currentWeekStart && (
         <button
           onClick={() => onOpenWeek(currentWeekStart)}
@@ -217,7 +222,7 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
           <span className="text-xl">⚠️</span>
           <div className="flex-1">
             <p className="text-sm font-bold text-amber-800">
-              Esta semana ({format(currentWeekStart, 'd MMM', { locale: es })} – {format(addDays(currentWeekStart, 6), 'd MMM', { locale: es })}) todavía no tiene planificación cargada.
+              {new Date().getDay() === 0 ? 'La semana que entra' : 'Esta semana'} ({format(currentWeekStart, 'd MMM', { locale: es })} – {format(addDays(currentWeekStart, 6), 'd MMM', { locale: es })}) todavía no tiene planificación cargada.
             </p>
             <p className="text-xs text-amber-600 mt-0.5">Tocá para ir directo al microciclo y completarlo.</p>
           </div>
