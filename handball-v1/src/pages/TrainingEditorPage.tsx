@@ -75,7 +75,7 @@ export function TrainingEditorPage() {
         session_date: today,
         team_category: selectedCategory ?? undefined,
         coach_name: profile?.full_name ?? '',
-        total_duration_min: 90,
+        total_duration_min: 60,
         session_number: 1,
         status: 'saved',
       },
