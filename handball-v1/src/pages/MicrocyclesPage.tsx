@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { Button, Toast } from '@/components/ui/index'
 import {
-  getOrCreateMacrocycle, updateMacrocycle,
+  getOrCreateMacrocycle, updateMacrocycle, listMacrocycles, createNewMacrocycle,
   listDaysInMonth, listAllDays, listDaysInWeek,
   upsertMicrocycleDay, computeContentStats, computeSubcontentStats, getWeeksInMonth, listDaysInWeek,
   addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory, updateMomentSubcontent,
@@ -59,6 +59,7 @@ export function MicrocyclesPage() {
 
   const [level, setLevel] = useState<Level>('macro')
   const [macro, setMacro] = useState<Macrocycle | null>(null)
+  const [allMacros, setAllMacros] = useState<Macrocycle[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [activeWeekStart, setActiveWeekStart] = useState<Date | null>(null)
@@ -67,10 +68,30 @@ export function MicrocyclesPage() {
     if (!profile || !category) return
     setLoading(true)
     getOrCreateMacrocycle(profile.id, category)
-      .then(setMacro)
+      .then(m => {
+        setMacro(m)
+        return listMacrocycles(profile.id, category)
+      })
+      .then(setAllMacros)
       .catch(() => setToast({ msg: 'Error al cargar el macrociclo.', type: 'error' }))
       .finally(() => setLoading(false))
   }, [profile, category])
+
+  function handleSelectMacro(m: Macrocycle) {
+    setMacro(m)
+  }
+
+  async function handleCreateMacro(name: string, startDate: string) {
+    if (!profile) return
+    try {
+      const created = await createNewMacrocycle(profile.id, category, name, startDate)
+      setAllMacros(prev => [created, ...prev].sort((a, b) => b.start_date.localeCompare(a.start_date)))
+      setMacro(created)
+      setToast({ msg: 'Nueva temporada creada.', type: 'success' })
+    } catch {
+      setToast({ msg: 'Error al crear la temporada.', type: 'error' })
+    }
+  }
 
   function openWeek(weekStart: Date) {
     setActiveWeekStart(weekStart)
@@ -83,7 +104,15 @@ export function MicrocyclesPage() {
   return (
     <div className="space-y-4">
       {level === 'macro' && (
-        <MacroView macro={macro} onUpdateMacro={setMacro} onOpenWeek={openWeek} onToast={setToast}/>
+        <MacroView
+          macro={macro}
+          allMacros={allMacros}
+          onSelectMacro={handleSelectMacro}
+          onCreateMacro={handleCreateMacro}
+          onUpdateMacro={setMacro}
+          onOpenWeek={openWeek}
+          onToast={setToast}
+        />
       )}
       {level === 'editor' && activeWeekStart && (
         <MicrocycleEditor
@@ -101,13 +130,19 @@ export function MicrocyclesPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // VISTA MACROCICLO
 // ════════════════════════════════════════════════════════════════════════════
-function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
+function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMacro, onOpenWeek, onToast }: {
   macro: Macrocycle
+  allMacros: Macrocycle[]
+  onSelectMacro: (m: Macrocycle) => void
+  onCreateMacro: (name: string, startDate: string) => void
   onUpdateMacro: (m: Macrocycle) => void
   onOpenWeek: (weekStart: Date) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
   const [showInfo, setShowInfo] = useState(false)
+  const [showNewSeason, setShowNewSeason] = useState(false)
+  const [newSeasonName, setNewSeasonName] = useState('')
+  const [newSeasonDate, setNewSeasonDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [annualObjective, setAnnualObjective] = useState(macro.annual_objective ?? '')
   const [annualObservations, setAnnualObservations] = useState(macro.annual_observations ?? '')
   const [saving, setSaving] = useState(false)
@@ -122,6 +157,12 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   const [currentWeekStart, setCurrentWeekStart] = useState<Date | null>(null)
 
   const { profile } = useAppStore()
+
+  // Sincroniza los campos de texto cuando se cambia de temporada (macro)
+  useEffect(() => {
+    setAnnualObjective(macro.annual_objective ?? '')
+    setAnnualObservations(macro.annual_observations ?? '')
+  }, [macro.id])
 
   // Chequeo de la semana a avisar: si hoy es domingo, se adelanta a la semana que arranca mañana.
   // Cualquier otro día, chequea la semana actual. Independiente del mes navegado en el calendario.
@@ -207,11 +248,79 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-dj-600 text-xs font-bold uppercase tracking-wide mb-0.5">Macrociclo</p>
-        <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-dj-600 text-xs font-bold uppercase tracking-wide mb-0.5">Macrociclo</p>
+          <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {allMacros.length > 1 && (
+            <select
+              value={macro.id}
+              onChange={e => {
+                const selected = allMacros.find(m => m.id === e.target.value)
+                if (selected) onSelectMacro(selected)
+              }}
+              className="text-sm rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dj-400"
+            >
+              {allMacros.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          )}
+          <Button variant="secondary" size="sm" icon={<Plus size={14}/>} onClick={() => setShowNewSeason(true)}>
+            Nueva temporada
+          </Button>
+        </div>
       </div>
+
+      {showNewSeason && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowNewSeason(false) }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Nueva temporada</h3>
+              <button onClick={() => setShowNewSeason(false)} className="text-gray-400 hover:text-gray-700">
+                <X size={18}/>
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Nombre</label>
+                <input
+                  value={newSeasonName}
+                  onChange={e => setNewSeasonName(e.target.value)}
+                  placeholder={`Ej: Temporada ${new Date().getFullYear() + 1}`}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Fecha de inicio</label>
+                <input
+                  type="date"
+                  value={newSeasonDate}
+                  onChange={e => setNewSeasonDate(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                />
+              </div>
+              <Button
+                className="w-full"
+                disabled={!newSeasonName.trim()}
+                onClick={() => {
+                  onCreateMacro(newSeasonName.trim(), newSeasonDate)
+                  setShowNewSeason(false)
+                  setNewSeasonName('')
+                }}
+              >
+                Crear temporada
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Banner: la semana actual (o entrante, si es domingo) todavía no tiene contenido cargado */}
       {currentWeekEmpty && currentWeekStart && (
@@ -544,6 +653,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
         microcycleNumber: Math.ceil(weekStart.getDate() / 7),
         weekStart,
         days: orderedDays,
+        subcontents,
       })
     } finally {
       setExporting(false)
@@ -766,12 +876,22 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
   const subOptions = moment.category ? subcontents.filter(s => s.category === moment.category) : []
   const currentSub = subcontents.find(s => s.id === moment.subcontent_id)
 
+  useEffect(() => {
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   function openPicker() {
     const rect = triggerRef.current?.getBoundingClientRect()
     if (rect) {
       setPickerPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX })
     }
     setShowCatPicker(true)
+    document.body.style.overflow = 'hidden'
+  }
+
+  function closePicker() {
+    setShowCatPicker(false)
+    document.body.style.overflow = ''
   }
 
   async function handleCreateSub() {
@@ -804,7 +924,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
 
       <button
         ref={triggerRef}
-        onClick={() => (showCatPicker ? setShowCatPicker(false) : openPicker())}
+        onClick={() => (showCatPicker ? closePicker() : openPicker())}
         className="text-[9px] font-bold mt-1 underline opacity-80 hover:opacity-100"
       >
         {moment.category ? CONTENT_SHORT[moment.category] : 'Elegir categoría'}
@@ -813,7 +933,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
 
       {showCatPicker && pickerPos && createPortal(
         <>
-          <div className="fixed inset-0 z-[90]" onClick={() => setShowCatPicker(false)}/>
+          <div className="fixed inset-0 z-[90]" onClick={closePicker}/>
           <div
             className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-52"
             style={{ top: pickerPos.top, left: pickerPos.left }}
@@ -833,7 +953,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
               </button>
             ))}
             <button
-              onClick={() => { onCategory(null); setShowCatPicker(false) }}
+              onClick={() => { onCategory(null); closePicker() }}
               className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
             >
               Sin categoría
@@ -880,7 +1000,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
             )}
 
             <button
-              onClick={() => setShowCatPicker(false)}
+              onClick={closePicker}
               className="w-full text-center text-[10px] font-bold text-dj-600 hover:bg-dj-50 rounded-lg py-1.5 mt-1"
             >
               Listo
