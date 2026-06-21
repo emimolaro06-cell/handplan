@@ -3,15 +3,16 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
   GripVertical, Trash2, ChevronDown, ChevronUp,
-  ArrowUp, ArrowDown, Upload, X, Plus, Settings, PenTool,
+  ArrowUp, ArrowDown, Upload, X, Plus, Settings, PenTool, Library, Search,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
-import { uploadImage, addExerciseLabel, deleteExerciseLabel } from '@/lib/supabase'
+import { uploadImage, addExerciseLabel, deleteExerciseLabel, getExercises } from '@/lib/supabase'
+import { getExerciseCategories } from '@/lib/exerciseCategories'
 import { listSubcontents, addSubcontent } from '@/lib/subcontents'
-import { EXERCISE_CATEGORIES, CONTENT_CATEGORIES } from '@/lib/constants'
+import { CONTENT_CATEGORIES } from '@/lib/constants'
 import { Select, Textarea, Input, Button, Modal, Toast } from '@/components/ui/index'
 import { TacticalBoard } from '@/components/training/TacticalBoard'
-import type { Moment, ExerciseLabel, ContentCategory, Subcontent } from '@/types'
+import type { Moment, ExerciseLabel, ContentCategory, Subcontent, Exercise } from '@/types'
 
 interface Props {
   moment: Moment
@@ -51,9 +52,43 @@ export function MomentCard({
   const [newSubLabel, setNewSubLabel] = useState('')
   const [addingSub, setAddingSub]     = useState(false)
 
+  // Categorías de ejercicio dinámicas (editables por el profe)
+  const [exerciseCategories, setExerciseCategories] = useState<{ id: string; category: string }[]>([])
+
+  // Elegir un ejercicio de la Biblioteca para autocompletar el Momento
+  const [showLibrary, setShowLibrary] = useState(false)
+  const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([])
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [loadingLibrary, setLoadingLibrary] = useState(false)
+
   useEffect(() => {
     listSubcontents(userId).then(setSubcontents).catch(() => {})
+    getExerciseCategories().then(({ data }) => setExerciseCategories(data ?? [])).catch(() => {})
   }, [userId])
+
+  function openLibrary() {
+    setShowLibrary(true)
+    setLoadingLibrary(true)
+    getExercises().then(({ data }) => {
+      setLibraryExercises((data as Exercise[]) ?? [])
+      setLoadingLibrary(false)
+    })
+  }
+
+  function handlePickFromLibrary(ex: Exercise) {
+    onChange({
+      ...moment,
+      exercise_label: ex.name,
+      exercise_category: ex.category as Moment['exercise_category'],
+      description: ex.description || moment.description,
+      image_url: ex.image_url ?? moment.image_url,
+    })
+    setShowLibrary(false)
+  }
+
+  const filteredLibrary = libraryExercises.filter(ex =>
+    !librarySearch || ex.name.toLowerCase().includes(librarySearch.toLowerCase())
+  )
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: moment.id })
@@ -121,7 +156,7 @@ export function MomentCard({
     }
   }
 
-  const catOptions   = EXERCISE_CATEGORIES.map(c => ({ value: c, label: c }))
+  const catOptions   = exerciseCategories.map(c => ({ value: c.category, label: c.category }))
   const labelOptions = [
     { value: '', label: '— Seleccioná un ejercicio —' },
     ...exerciseLabels.map(l => ({ value: l.label, label: l.label })),
@@ -183,9 +218,14 @@ export function MomentCard({
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-gray-700">Nombre del ejercicio</label>
-                  <button type="button" onClick={() => setShowLabelMgr(true)} className="text-xs text-dj-600 hover:text-dj-800 flex items-center gap-1">
-                    <Settings size={12}/> Editar lista
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={openLibrary} className="text-xs text-dj-600 hover:text-dj-800 flex items-center gap-1">
+                      <Library size={12}/> Mi biblioteca
+                    </button>
+                    <button type="button" onClick={() => setShowLabelMgr(true)} className="text-xs text-dj-600 hover:text-dj-800 flex items-center gap-1">
+                      <Settings size={12}/> Editar lista
+                    </button>
+                  </div>
                 </div>
                 <select
                   value={moment.exercise_label}
@@ -314,6 +354,45 @@ export function MomentCard({
           initialImage={moment.image_url}
         />
       )}
+
+      {/* Modal: elegir ejercicio de la biblioteca */}
+      <Modal open={showLibrary} onClose={() => setShowLibrary(false)} title="Mi biblioteca de ejercicios">
+        <div className="space-y-3">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input
+              value={librarySearch}
+              onChange={e => setLibrarySearch(e.target.value)}
+              placeholder="Buscar ejercicio..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+            />
+          </div>
+          <div className="max-h-80 overflow-y-auto space-y-2">
+            {loadingLibrary ? (
+              <p className="text-sm text-gray-400 text-center py-6">Cargando...</p>
+            ) : filteredLibrary.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">
+                No hay ejercicios en tu biblioteca todavía. Agregalos desde la sección "Ejercicios".
+              </p>
+            ) : filteredLibrary.map(ex => (
+              <button
+                type="button"
+                key={ex.id}
+                onClick={() => handlePickFromLibrary(ex)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-dj-300 hover:bg-dj-50/30 transition-colors text-left"
+              >
+                {ex.image_url && (
+                  <img src={ex.image_url} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0"/>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{ex.name}</p>
+                  <p className="text-xs text-gray-400">{ex.category}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal: administrar lista */}
       <Modal open={showLabelMgr} onClose={() => setShowLabelMgr(false)} title="Editar lista de ejercicios">
