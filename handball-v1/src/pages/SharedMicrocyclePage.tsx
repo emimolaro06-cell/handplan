@@ -19,10 +19,10 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
 }
 
 const CONTENT_COLOR: Record<ContentCategory, string> = {
-  'Técnica individual OFENSIVA':  'bg-dj-600 text-white',
-  'Técnica individual DEFENSIVA': 'bg-blue-600 text-white',
-  'Táctica OFENSIVA':  'bg-amber-500 text-white',
-  'Táctica DEFENSIVA': 'bg-purple-600 text-white',
+  'Técnica individual OFENSIVA':  'bg-dj-700 text-white',
+  'Táctica OFENSIVA':  'bg-dj-400 text-white',
+  'Técnica individual DEFENSIVA': 'bg-blue-700 text-white',
+  'Táctica DEFENSIVA': 'bg-blue-400 text-white',
   'MIXTO': 'bg-gray-600 text-white',
 }
 
