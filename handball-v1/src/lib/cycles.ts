@@ -203,15 +203,12 @@ export interface CountedMoment {
 
 // Trae los entrenamientos guardados del coach, cuya fecha cae dentro del macrociclo,
 // y devuelve sus Momentos que tengan categoría general asignada.
-export async function listTrainingMomentsForMacrocycle(
-  userId: string, macrocycleStart: string,
-): Promise<CountedMoment[]> {
+export async function listTrainingMomentsForMacrocycle(userId: string): Promise<CountedMoment[]> {
   const { data: sessions, error } = await supabase
     .from('training_sessions')
     .select('id, moments(content_category, subcontent_id)')
     .eq('user_id', userId)
     .eq('status', 'saved')
-    .gte('session_date', macrocycleStart)
   if (error) throw error
 
   const result: CountedMoment[] = []
