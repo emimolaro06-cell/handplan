@@ -46,10 +46,10 @@ const CONTENT_CATEGORIES: ContentCategory[] = [
 ]
 
 const CONTENT_COLOR: Record<ContentCategory, string> = {
-  'Técnica individual OFENSIVA':  'bg-dj-600 text-white',
-  'Técnica individual DEFENSIVA': 'bg-blue-600 text-white',
-  'Táctica OFENSIVA':  'bg-amber-500 text-white',
-  'Táctica DEFENSIVA': 'bg-purple-600 text-white',
+  'Técnica individual OFENSIVA':  'bg-dj-700 text-white',
+  'Táctica OFENSIVA':  'bg-dj-400 text-white',
+  'Técnica individual DEFENSIVA': 'bg-blue-700 text-white',
+  'Táctica DEFENSIVA': 'bg-blue-400 text-white',
   'MIXTO': 'bg-gray-600 text-white',
 }
 
@@ -867,32 +867,12 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
   onRemove: () => void
 }) {
   const [showCatPicker, setShowCatPicker] = useState(false)
-  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null)
   const [newSubLabel, setNewSubLabel] = useState('')
   const [addingSub, setAddingSub] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
   const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-dj-100 text-dj-900'
 
   const subOptions = moment.category ? subcontents.filter(s => s.category === moment.category) : []
   const currentSub = subcontents.find(s => s.id === moment.subcontent_id)
-
-  useEffect(() => {
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
-  function openPicker() {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (rect) {
-      setPickerPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX })
-    }
-    setShowCatPicker(true)
-    document.body.style.overflow = 'hidden'
-  }
-
-  function closePicker() {
-    setShowCatPicker(false)
-    document.body.style.overflow = ''
-  }
 
   async function handleCreateSub() {
     if (!moment.category || !newSubLabel.trim()) return
@@ -923,90 +903,96 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
       </div>
 
       <button
-        ref={triggerRef}
-        onClick={() => (showCatPicker ? closePicker() : openPicker())}
+        onClick={() => setShowCatPicker(true)}
         className="text-[9px] font-bold mt-1 underline opacity-80 hover:opacity-100"
       >
         {moment.category ? CONTENT_SHORT[moment.category] : 'Elegir categoría'}
         {currentSub ? ` · ${currentSub.label}` : ''}
       </button>
 
-      {showCatPicker && pickerPos && createPortal(
-        <>
-          <div className="fixed inset-0 z-[90]" onClick={closePicker}/>
-          <div
-            className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-gray-200 p-1.5 w-52"
-            style={{ top: pickerPos.top, left: pickerPos.left }}
-          >
-            <p className="text-[9px] font-bold text-gray-400 uppercase px-2 pt-1 pb-0.5">Categoría general</p>
-            {CONTENT_CATEGORIES.map(c => (
-              <button
-                key={c}
-                onClick={() => onCategory(c)}
-                className={clsx(
-                  'w-full text-left text-[10px] font-bold px-2 py-1.5 rounded-lg mb-0.5 flex items-center justify-between',
-                  CONTENT_COLOR[c],
-                  moment.category === c ? 'ring-2 ring-offset-1 ring-gray-300' : '',
-                )}
-              >
-                {CONTENT_SHORT[c]}
+      {showCatPicker && createPortal(
+        <div
+          className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowCatPicker(false) }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-gray-900 text-sm">Categoría y subcontenido</h3>
+              <button onClick={() => setShowCatPicker(false)} className="text-gray-400 hover:text-gray-700">
+                <X size={16}/>
               </button>
-            ))}
-            <button
-              onClick={() => { onCategory(null); closePicker() }}
-              className="w-full text-left text-[10px] font-medium px-2 py-1.5 rounded-lg text-gray-400 hover:bg-gray-50"
-            >
-              Sin categoría
-            </button>
+            </div>
 
-            {moment.category && (
-              <>
-                <div className="border-t border-gray-100 my-1.5"/>
-                <p className="text-[9px] font-bold text-gray-400 uppercase px-2 pb-0.5">Subcontenido</p>
-                <div className="max-h-32 overflow-y-auto space-y-0.5 mb-1.5">
-                  {subOptions.length === 0 && (
-                    <p className="text-[10px] text-gray-300 px-2 py-1">Sin subcontenidos todavía.</p>
-                  )}
-                  {subOptions.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => onSubcontent(s.id)}
-                      className={clsx(
-                        'w-full text-left text-[10px] px-2 py-1.5 rounded-lg',
-                        moment.subcontent_id === s.id ? 'bg-gray-100 font-bold text-gray-800' : 'text-gray-600 hover:bg-gray-50',
-                      )}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1 px-1 pb-1">
-                  <input
-                    value={newSubLabel}
-                    onChange={e => setNewSubLabel(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleCreateSub()}
-                    placeholder="Nuevo subcontenido..."
-                    className="flex-1 text-[10px] rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-dj-400"
-                  />
+            <div className="p-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Categoría general</p>
+              <div className="space-y-1 mb-3">
+                {CONTENT_CATEGORIES.map(c => (
                   <button
-                    onClick={handleCreateSub}
-                    disabled={addingSub || !newSubLabel.trim()}
-                    className="shrink-0 bg-dj-600 text-white rounded-lg px-2 disabled:opacity-40"
+                    key={c}
+                    onClick={() => onCategory(c)}
+                    className={clsx(
+                      'w-full text-left text-xs font-bold px-3 py-2 rounded-xl',
+                      CONTENT_COLOR[c],
+                      moment.category === c ? 'ring-2 ring-offset-1 ring-gray-300' : '',
+                    )}
                   >
-                    <Plus size={11}/>
+                    {CONTENT_SHORT[c]}
                   </button>
-                </div>
-              </>
-            )}
+                ))}
+                <button
+                  onClick={() => { onCategory(null); setShowCatPicker(false) }}
+                  className="w-full text-left text-xs font-medium px-3 py-2 rounded-xl text-gray-400 hover:bg-gray-50"
+                >
+                  Sin categoría
+                </button>
+              </div>
 
-            <button
-              onClick={closePicker}
-              className="w-full text-center text-[10px] font-bold text-dj-600 hover:bg-dj-50 rounded-lg py-1.5 mt-1"
-            >
-              Listo
-            </button>
+              {moment.category && (
+                <>
+                  <div className="border-t border-gray-100 my-3"/>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Subcontenido</p>
+                  <div className="space-y-1 mb-3">
+                    {subOptions.length === 0 && (
+                      <p className="text-xs text-gray-300 px-1 py-1">Sin subcontenidos todavía.</p>
+                    )}
+                    {subOptions.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => onSubcontent(s.id)}
+                        className={clsx(
+                          'w-full text-left text-xs px-3 py-2 rounded-xl',
+                          moment.subcontent_id === s.id ? 'bg-gray-100 font-bold text-gray-800' : 'text-gray-600 hover:bg-gray-50',
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newSubLabel}
+                      onChange={e => setNewSubLabel(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleCreateSub()}
+                      placeholder="Nuevo subcontenido..."
+                      className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dj-400"
+                    />
+                    <button
+                      onClick={handleCreateSub}
+                      disabled={addingSub || !newSubLabel.trim()}
+                      className="shrink-0 bg-dj-600 text-white rounded-xl px-3 disabled:opacity-40"
+                    >
+                      <Plus size={14}/>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <Button className="w-full mt-4" onClick={() => setShowCatPicker(false)}>
+                Listo
+              </Button>
+            </div>
           </div>
-        </>,
+        </div>,
         document.body,
       )}
     </div>
