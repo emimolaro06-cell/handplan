@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, Plus, X, Save, FileDown, Share2,
   ChevronDown, ChevronUp, Copy, Check, Calendar, ImagePlus, Trash2,
 } from 'lucide-react'
-import { format, addMonths, subMonths } from 'date-fns'
+import { format, addMonths, subMonths, startOfWeek, addDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
@@ -17,7 +17,7 @@ import { Button, Toast } from '@/components/ui/index'
 import {
   getOrCreateMacrocycle, updateMacrocycle,
   listDaysInMonth, listAllDays, listDaysInWeek,
-  upsertMicrocycleDay, computeContentStats, computeSubcontentStats, getWeeksInMonth,
+  upsertMicrocycleDay, computeContentStats, computeSubcontentStats, getWeeksInMonth, listDaysInWeek,
   addMomentToDay, removeMomentFromDay, updateMomentContent, updateMomentCategory, updateMomentSubcontent,
   getOrCreateShareLink, buildShareUrl, uploadDayImage, listTrainingMomentsForMacrocycle,
 } from '@/lib/cycles'
@@ -118,8 +118,22 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
   const [loadingMonth, setLoadingMonth] = useState(true)
   const [subcontents, setSubcontents] = useState<Subcontent[]>([])
   const [pieCategory, setPieCategory] = useState<ContentCategory | ''>('')
+  const [currentWeekEmpty, setCurrentWeekEmpty] = useState(false)
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date | null>(null)
 
   const { profile } = useAppStore()
+
+  // Chequeo de la semana ACTUAL (hoy), independiente del mes que se esté navegando en el calendario
+  useEffect(() => {
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+    setCurrentWeekStart(weekStart)
+    listDaysInWeek(macro.id, weekStart)
+      .then(days => {
+        const hasContent = days.some(d => d.labels.length > 0 || d.moments.length > 0 || !!d.rival_logo_url)
+        setCurrentWeekEmpty(!hasContent)
+      })
+      .catch(() => {})
+  }, [macro.id])
 
   useEffect(() => {
     setLoadingMonth(true)
@@ -193,6 +207,22 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
         <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
         <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
       </div>
+
+      {/* Banner: la semana actual todavía no tiene contenido cargado */}
+      {currentWeekEmpty && currentWeekStart && (
+        <button
+          onClick={() => onOpenWeek(currentWeekStart)}
+          className="w-full flex items-center gap-3 bg-amber-50 border-2 border-amber-200 hover:border-amber-300 rounded-2xl px-4 py-3 text-left transition-colors"
+        >
+          <span className="text-xl">⚠️</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-800">
+              Esta semana ({format(currentWeekStart, 'd MMM', { locale: es })} – {format(addDays(currentWeekStart, 6), 'd MMM', { locale: es })}) todavía no tiene planificación cargada.
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">Tocá para ir directo al microciclo y completarlo.</p>
+          </div>
+        </button>
+      )}
 
       {/* Objetivos y Observaciones */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
