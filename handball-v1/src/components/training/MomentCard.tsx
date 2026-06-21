@@ -148,7 +148,7 @@ export function MomentCard({
       >
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
-          <button {...attributes} {...listeners} className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none p-0.5">
+          <button type="button" {...attributes} {...listeners} className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none p-0.5">
             <GripVertical size={17}/>
           </button>
           <div className="w-7 h-7 rounded-lg bg-dj-700 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
@@ -160,17 +160,17 @@ export function MomentCard({
             </p>
           </div>
           <div className="flex items-center gap-0.5">
-            <button disabled={index === 0} onClick={onMoveUp} className="p-1 text-gray-300 hover:text-dj-600 disabled:opacity-30 disabled:cursor-not-allowed">
+            <button type="button" disabled={index === 0} onClick={onMoveUp} className="p-1 text-gray-300 hover:text-dj-600 disabled:opacity-30 disabled:cursor-not-allowed">
               <ArrowUp size={15}/>
             </button>
-            <button disabled={index === total - 1} onClick={onMoveDown} className="p-1 text-gray-300 hover:text-dj-600 disabled:opacity-30 disabled:cursor-not-allowed">
+            <button type="button" disabled={index === total - 1} onClick={onMoveDown} className="p-1 text-gray-300 hover:text-dj-600 disabled:opacity-30 disabled:cursor-not-allowed">
               <ArrowDown size={15}/>
             </button>
           </div>
-          <button onClick={() => setCollapsed(!collapsed)} className="p-1 text-gray-400 hover:text-gray-700">
+          <button type="button" onClick={() => setCollapsed(!collapsed)} className="p-1 text-gray-400 hover:text-gray-700">
             {collapsed ? <ChevronDown size={16}/> : <ChevronUp size={16}/>}
           </button>
-          <button onClick={onRemove} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+          <button type="button" onClick={onRemove} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
             <Trash2 size={15}/>
           </button>
         </div>
@@ -183,7 +183,7 @@ export function MomentCard({
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-gray-700">Nombre del ejercicio</label>
-                  <button onClick={() => setShowLabelMgr(true)} className="text-xs text-dj-600 hover:text-dj-800 flex items-center gap-1">
+                  <button type="button" onClick={() => setShowLabelMgr(true)} className="text-xs text-dj-600 hover:text-dj-800 flex items-center gap-1">
                     <Settings size={12}/> Editar lista
                   </button>
                 </div>
@@ -219,7 +219,7 @@ export function MomentCard({
                 {moment.image_url ? (
                   <div className="relative rounded-xl overflow-hidden border border-gray-100 h-28">
                     <img src={moment.image_url} alt="" className="w-full h-full object-cover"/>
-                    <button
+                    <button type="button"
                       onClick={() => update('image_url', null)}
                       className="absolute top-2 right-2 bg-white/90 text-red-500 rounded-lg p-1 hover:bg-white shadow"
                     >
@@ -228,7 +228,7 @@ export function MomentCard({
                   </div>
                 ) : (
                   <div className="flex gap-2 h-28">
-                    <button
+                    <button type="button"
                       onClick={() => fileRef.current?.click()}
                       disabled={uploading}
                       className="flex-1 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-dj-400 hover:text-dj-600 transition-colors"
@@ -237,7 +237,7 @@ export function MomentCard({
                         <><Upload size={18}/><p className="text-xs font-medium">Subir imagen</p></>
                       )}
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => setShowBoard(true)}
                       className="flex-1 border-2 border-dashed border-dj-200 rounded-xl flex flex-col items-center justify-center gap-1 text-dj-400 hover:border-dj-500 hover:text-dj-600 transition-colors bg-dj-50/30"
                     >
@@ -334,7 +334,7 @@ export function MomentCard({
             ) : exerciseLabels.map(l => (
               <div key={l.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl">
                 <p className="text-sm text-gray-800">{l.label}</p>
-                <button onClick={() => handleDeleteLabel(l.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                <button type="button" onClick={() => handleDeleteLabel(l.id)} className="text-gray-300 hover:text-red-500 transition-colors">
                   <X size={14}/>
                 </button>
               </div>
