@@ -134,9 +134,13 @@ function MacroView({ macro, onUpdateMacro, onOpenWeek, onToast }: {
 
   useEffect(() => {
     if (!profile) return
-    listTrainingMomentsForMacrocycle(profile.id, macro.start_date).then(setTrainingMoments).catch(() => {})
-    listSubcontents(profile.id).then(setSubcontents).catch(() => {})
-  }, [profile, macro.id, macro.start_date])
+    listTrainingMomentsForMacrocycle(profile.id)
+      .then(setTrainingMoments)
+      .catch(err => console.error('Error al cargar momentos de entrenamientos para estadísticas:', err))
+    listSubcontents(profile.id)
+      .then(setSubcontents)
+      .catch(err => console.error('Error al cargar subcontenidos:', err))
+  }, [profile, macro.id])
 
   const stats = useMemo(
     () => computeContentStats(allDays, trainingMoments),
