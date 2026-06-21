@@ -3,7 +3,7 @@ import {
 } from '@react-pdf/renderer'
 import { format } from 'date-fns'
 import { CLUB_NAME } from '@/lib/constants'
-import type { MicrocycleDay } from '@/types'
+import type { MicrocycleDay, ContentCategory, Subcontent } from '@/types'
 
 const GREEN  = '#1a6b1a'
 const YELLOW = '#f5c842'
@@ -13,11 +13,29 @@ const LIGHT  = '#eef7ee'
 
 const WEEK_LABELS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO']
 
+const CONTENT_SHORT: Record<ContentCategory, string> = {
+  'Técnica individual OFENSIVA':  'TÉC IND OF',
+  'Técnica individual DEFENSIVA': 'TÉC IND DEF',
+  'Táctica OFENSIVA':  'TAC OF',
+  'Táctica DEFENSIVA': 'TAC DEF',
+  'MIXTO': 'MIXTO',
+}
+
+// Mismos colores que la pantalla, en hex (PDF no entiende clases de Tailwind)
+const CONTENT_PDF_COLOR: Record<ContentCategory, string> = {
+  'Técnica individual OFENSIVA':  '#166f16',
+  'Técnica individual DEFENSIVA': '#1d4ed8',
+  'Táctica OFENSIVA':  '#d97706',
+  'Táctica DEFENSIVA': '#7c3aed',
+  'MIXTO': '#4b5563',
+}
+
 export interface MicrocyclePDFInput {
   mesocycleNumber: number
   microcycleNumber: number
   weekStart: Date
   days: MicrocycleDay[]
+  subcontents: Subcontent[]
 }
 
 const s = StyleSheet.create({
@@ -40,25 +58,49 @@ const s = StyleSheet.create({
   dayName:   { color: YELLOW, fontSize: 9, fontFamily: 'Helvetica-Bold' },
   dayDate:   { color: WHITE, fontSize: 11, fontFamily: 'Helvetica-Bold', marginTop: 1 },
 
-  // Imagen del rival/escudo
   rivalImg: { width: '100%', height: 50, objectFit: 'contain', marginBottom: 4, borderRadius: 4 },
 
-  // Chips de etiqueta
   labelsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginBottom: 4 },
   chip:      { backgroundColor: YELLOW, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
   chipText:  { color: DARK, fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
 
-  // Momentos
   momentBox:   { backgroundColor: LIGHT, border: `1px solid ${GREEN}`, borderRadius: 5, padding: 5, marginBottom: 4 },
   momentLabel: { color: GREEN, fontSize: 7, fontFamily: 'Helvetica-Bold', marginBottom: 1 },
-  momentText:  { color: DARK, fontSize: 8, lineHeight: 1.3 },
+  momentText:  { color: DARK, fontSize: 8, lineHeight: 1.3, marginBottom: 2 },
+  catBadge:    { borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2, alignSelf: 'flex-start' },
+  catBadgeText:{ color: WHITE, fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
 
   emptyDay: { color: '#999', fontSize: 8, textAlign: 'center', marginTop: 10 },
 })
 
-function DayCol({ label, day }: { label: string; day: MicrocycleDay }) {
+function MomentBox({ index, content, category, subcontentLabel }: {
+  index: number
+  content: string
+  category: ContentCategory | null
+  subcontentLabel: string | null
+}) {
+  return (
+    <View style={s.momentBox}>
+      <Text style={s.momentLabel}>M{index + 1}:</Text>
+      <Text style={s.momentText}>{content}</Text>
+      {category && (
+        <View style={[s.catBadge, { backgroundColor: CONTENT_PDF_COLOR[category] }]}>
+          <Text style={s.catBadgeText}>
+            {CONTENT_SHORT[category]}{subcontentLabel ? ` · ${subcontentLabel}` : ''}
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
+function DayCol({ label, day, subcontents }: {
+  label: string; day: MicrocycleDay; subcontents: Subcontent[]
+}) {
   const date = new Date(day.date + 'T12:00:00')
-  const hasContent = (day.labels?.length ?? 0) > 0 || day.moments.length > 0 || !!day.rival_logo_url
+  // Solo se cuentan como "contenido real" los Momentos con texto o categoría asignada
+  const realMoments = day.moments.filter(m => m.content.trim() || m.category)
+  const hasContent = (day.labels?.length ?? 0) > 0 || realMoments.length > 0 || !!day.rival_logo_url
 
   return (
     <View style={s.col}>
@@ -67,12 +109,10 @@ function DayCol({ label, day }: { label: string; day: MicrocycleDay }) {
         <Text style={s.dayDate}>{format(date, 'd/MM/yyyy')}</Text>
       </View>
 
-      {/* Imagen del día (escudo del rival, etc.) */}
       {day.rival_logo_url && (
         <Image src={day.rival_logo_url} style={s.rivalImg as Record<string, unknown>}/>
       )}
 
-      {/* Chips de etiqueta libre */}
       {(day.labels?.length ?? 0) > 0 && (
         <View style={s.labelsRow}>
           {(day.labels ?? []).map((lbl, i) => (
@@ -83,12 +123,14 @@ function DayCol({ label, day }: { label: string; day: MicrocycleDay }) {
         </View>
       )}
 
-      {/* Momentos */}
-      {[...day.moments].sort((a, b) => a.order - b.order).map((m, i) => (
-        <View key={m.id} style={s.momentBox}>
-          <Text style={s.momentLabel}>M{i + 1}:</Text>
-          <Text style={s.momentText}>{m.content || '—'}</Text>
-        </View>
+      {[...realMoments].sort((a, b) => a.order - b.order).map((m, i) => (
+        <MomentBox
+          key={m.id}
+          index={i}
+          content={m.content || '—'}
+          category={m.category}
+          subcontentLabel={m.subcontent_id ? (subcontents.find(s => s.id === m.subcontent_id)?.label ?? null) : null}
+        />
       ))}
 
       {!hasContent && <Text style={s.emptyDay}>—</Text>}
@@ -99,10 +141,12 @@ function DayCol({ label, day }: { label: string; day: MicrocycleDay }) {
 function MicrocycleDocument({ input }: { input: MicrocyclePDFInput }) {
   const logoUrl = `${window.location.origin}/logo-dj.png`
 
-  // Solo incluye días que tengan algo cargado (labels, momentos o imagen)
   const activeDays = input.days
     .map((day, i) => ({ day, label: WEEK_LABELS[i] }))
-    .filter(({ day }) => (day.labels?.length ?? 0) > 0 || day.moments.length > 0 || !!day.rival_logo_url)
+    .filter(({ day }) => {
+      const realMoments = day.moments.filter(m => m.content.trim() || m.category)
+      return (day.labels?.length ?? 0) > 0 || realMoments.length > 0 || !!day.rival_logo_url
+    })
 
   const daysToRender = activeDays.length > 0
     ? activeDays
@@ -124,7 +168,7 @@ function MicrocycleDocument({ input }: { input: MicrocyclePDFInput }) {
 
         <View style={s.grid}>
           {daysToRender.map(({ day, label }) => (
-            <DayCol key={day.date} label={label} day={day}/>
+            <DayCol key={day.date} label={label} day={day} subcontents={input.subcontents}/>
           ))}
         </View>
       </Page>
