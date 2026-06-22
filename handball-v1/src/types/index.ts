@@ -193,3 +193,14 @@ export interface AttendanceRecord {
   present: boolean
   created_at: string
 }
+
+// ─── Cuentas (multi-club: un club o un entrenador individual) ────────────────
+export interface Account {
+  id: string
+  name: string
+  access_code: string
+  logo_url: string | null
+  primary_color: string
+  admin_id: string | null
+  created_at: string
+}
