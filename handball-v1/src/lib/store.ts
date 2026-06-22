@@ -1,9 +1,14 @@
 import { create } from 'zustand'
-import type { Profile, TeamCategory } from '@/types'
+import type { Profile, TeamCategory, Account } from '@/types'
 
 interface AppState {
   profile: Profile | null
   setProfile: (p: Profile | null) => void
+
+  // Cuenta (club o entrenador individual) reconocida por el código ingresado en la pantalla
+  // de entrada. Define la identidad visual (nombre, logo, color) de toda la app.
+  account: Account | null
+  setAccount: (a: Account | null) => void
 
   // ID a usar para leer/escribir datos (training_sessions.user_id, players.user_id, etc.).
   // Para un coach normal es su propio id. Para un Ayudante Técnico vinculado, es el id
@@ -31,6 +36,9 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   profile: null,
   setProfile: (profile) => set({ profile }),
+
+  account: null,
+  setAccount: (account) => set({ account }),
 
   effectiveUserId: null,
   setEffectiveUserId: (effectiveUserId) => set({ effectiveUserId }),
