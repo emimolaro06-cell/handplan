@@ -176,3 +176,20 @@ export interface Subcontent {
   label: string
   created_at: string
 }
+
+// ─── Jugadores y asistencia ───────────────────────────────────────────────────
+export interface Player {
+  id: string
+  user_id: string
+  team_category: TeamCategory
+  full_name: string
+  created_at: string
+}
+
+export interface AttendanceRecord {
+  id: string
+  player_id: string
+  date: string       // 'yyyy-MM-dd'
+  present: boolean
+  created_at: string
+}
