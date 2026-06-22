@@ -18,7 +18,7 @@ import type { Player, AttendanceRecord, TeamCategory } from '@/types'
 type Tab = 'marcar' | 'resumen'
 
 export function AttendancePage() {
-  const { profile, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory } = useAppStore()
   const category = selectedCategory as TeamCategory
 
   const [tab, setTab] = useState<Tab>('marcar')
@@ -29,18 +29,18 @@ export function AttendancePage() {
   const [newPlayerName, setNewPlayerName] = useState('')
 
   useEffect(() => {
-    if (!profile || !category) return
+    if (!effectiveUserId || !category) return
     setLoading(true)
-    listPlayers(profile.id, category)
+    listPlayers(effectiveUserId, category)
       .then(setPlayers)
       .catch(() => setToast({ msg: 'Error al cargar jugadores.', type: 'error' }))
       .finally(() => setLoading(false))
-  }, [profile, category])
+  }, [effectiveUserId, category])
 
   async function handleAddPlayer() {
-    if (!profile || !newPlayerName.trim()) return
+    if (!effectiveUserId || !newPlayerName.trim()) return
     try {
-      const created = await addPlayer(profile.id, category, newPlayerName.trim())
+      const created = await addPlayer(effectiveUserId, category, newPlayerName.trim())
       setPlayers(prev => [...prev, created].sort((a, b) => a.full_name.localeCompare(b.full_name)))
       setNewPlayerName('')
       setShowAddPlayer(false)

@@ -54,7 +54,7 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
 }
 
 export function MicrocyclesPage() {
-  const { profile, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory } = useAppStore()
   const category = selectedCategory as TeamCategory
 
   const [level, setLevel] = useState<Level>('macro')
@@ -65,26 +65,26 @@ export function MicrocyclesPage() {
   const [activeWeekStart, setActiveWeekStart] = useState<Date | null>(null)
 
   useEffect(() => {
-    if (!profile || !category) return
+    if (!effectiveUserId || !category) return
     setLoading(true)
-    getOrCreateMacrocycle(profile.id, category)
+    getOrCreateMacrocycle(effectiveUserId!, category)
       .then(m => {
         setMacro(m)
-        return listMacrocycles(profile.id, category)
+        return listMacrocycles(effectiveUserId!, category)
       })
       .then(setAllMacros)
       .catch(() => setToast({ msg: 'Error al cargar el macrociclo.', type: 'error' }))
       .finally(() => setLoading(false))
-  }, [profile, category])
+  }, [effectiveUserId, category])
 
   function handleSelectMacro(m: Macrocycle) {
     setMacro(m)
   }
 
   async function handleCreateMacro(name: string, startDate: string) {
-    if (!profile) return
+    if (!effectiveUserId) return
     try {
-      const created = await createNewMacrocycle(profile.id, category, name, startDate)
+      const created = await createNewMacrocycle(effectiveUserId!, category, name, startDate)
       setAllMacros(prev => [created, ...prev].sort((a, b) => b.start_date.localeCompare(a.start_date)))
       setMacro(created)
       setToast({ msg: 'Nueva temporada creada.', type: 'success' })
@@ -156,7 +156,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
   const [currentWeekEmpty, setCurrentWeekEmpty] = useState(false)
   const [currentWeekStart, setCurrentWeekStart] = useState<Date | null>(null)
 
-  const { profile } = useAppStore()
+  const { profile, effectiveUserId } = useAppStore()
 
   // Sincroniza los campos de texto cuando se cambia de temporada (macro)
   useEffect(() => {
@@ -193,14 +193,14 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
   }, [macro.id])
 
   useEffect(() => {
-    if (!profile) return
-    listTrainingMomentsForMacrocycle(profile.id)
+    if (!effectiveUserId) return
+    listTrainingMomentsForMacrocycle(effectiveUserId!)
       .then(setTrainingMoments)
       .catch(err => console.error('Error al cargar momentos de entrenamientos para estadísticas:', err))
-    listSubcontents(profile.id)
+    listSubcontents(effectiveUserId!)
       .then(setSubcontents)
       .catch(err => console.error('Error al cargar subcontenidos:', err))
-  }, [profile, macro.id])
+  }, [effectiveUserId, macro.id])
 
   const stats = useMemo(
     () => computeContentStats(allDays, trainingMoments),
@@ -515,7 +515,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   const [showShare, setShowShare] = useState(false)
   const [subcontents, setSubcontents] = useState<Subcontent[]>([])
 
-  const { profile } = useAppStore()
+  const { profile, effectiveUserId } = useAppStore()
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -525,13 +525,13 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   const weekEnd = weekDates[6]
 
   useEffect(() => {
-    if (!profile) return
-    listSubcontents(profile.id).then(setSubcontents).catch(() => {})
-  }, [profile])
+    if (!effectiveUserId) return
+    listSubcontents(effectiveUserId!).then(setSubcontents).catch(() => {})
+  }, [effectiveUserId])
 
   async function handleAddSubcontent(category: ContentCategory, label: string) {
-    if (!profile) return
-    const created = await addSubcontent(profile.id, category, label)
+    if (!effectiveUserId) return
+    const created = await addSubcontent(effectiveUserId!, category, label)
     setSubcontents(prev => [...prev, created])
     return created
   }
@@ -1008,14 +1008,14 @@ function ShareModal({ macrocycleId, weekStart, onClose, onToast }: {
   onClose: () => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
-  const { profile } = useAppStore()
+  const { profile, effectiveUserId } = useAppStore()
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    if (!profile) return
-    getOrCreateShareLink(macrocycleId, format(weekStart, 'yyyy-MM-dd'), profile.id)
+    if (!effectiveUserId) return
+    getOrCreateShareLink(macrocycleId, format(weekStart, 'yyyy-MM-dd'), effectiveUserId!)
       .then(shared => setUrl(buildShareUrl(shared.token)))
       .catch(() => onToast({ msg: 'Error al generar el link.', type: 'error' }))
       .finally(() => setLoading(false))

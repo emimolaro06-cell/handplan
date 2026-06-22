@@ -49,7 +49,7 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 export function MonthlyPlanPage() {
-  const { profile, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory } = useAppStore()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [plan, setPlan] = useState<MonthPlan | null>(null)
@@ -71,11 +71,11 @@ export function MonthlyPlanPage() {
   const calDays    = eachDayOfInterval({ start: calStart, end: calEnd })
 
   useEffect(() => {
-    if (!profile || !category) return
+    if (!effectiveUserId || !category) return
     supabase
       .from('monthly_plans')
       .select('*')
-      .eq('user_id', profile.id)
+      .eq('user_id', effectiveUserId)
       .eq('team_category', category)
       .eq('year', year)
       .eq('month', month)
@@ -85,7 +85,7 @@ export function MonthlyPlanPage() {
           setPlan(data as MonthPlan)
         } else {
           setPlan({
-            user_id: profile.id,
+            user_id: effectiveUserId,
             team_category: category,
             year, month,
             rivals: '', monthly_contents: '', observations: '',
@@ -93,7 +93,7 @@ export function MonthlyPlanPage() {
           })
         }
       })
-  }, [profile, category, year, month])
+  }, [effectiveUserId, category, year, month])
 
   function getDayKey(date: Date) { return format(date, 'yyyy-MM-dd') }
 
@@ -123,7 +123,7 @@ export function MonthlyPlanPage() {
   }
 
   async function handleSave() {
-    if (!plan || !profile) return
+    if (!plan || !effectiveUserId) return
     setSaving(true)
     const { id, ...rest } = plan
     if (id) {

@@ -40,7 +40,7 @@ export function TrainingEditorPage() {
   const navigate = useNavigate()
   const { id }   = useParams<{ id?: string }>()
   const isEdit   = Boolean(id)
-  const { profile, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory } = useAppStore()
 
   const [moments, setMoments]               = useState<Moment[]>([blankMoment()])
   const [exerciseLabels, setExerciseLabels] = useState<ExerciseLabel[]>([])
@@ -130,7 +130,7 @@ export function TrainingEditorPage() {
 
   // ─── Guardar ───────────────────────────────────────────────────────────────
   async function save(formData: SessionFormData, status: 'draft'|'saved' = 'saved') {
-    if (!profile) return null
+    if (!effectiveUserId) return null
     setSaving(true)
     const momentRows = moments.map((m, i) => ({
       exercise_label: m.exercise_label, duration_min: m.duration_min,
@@ -141,7 +141,7 @@ export function TrainingEditorPage() {
     const sessionData = { ...formData, status }
     let result
     if (isEdit && sessionId) result = await updateSession(sessionId, sessionData, momentRows)
-    else result = await createSession(profile.id, sessionData, momentRows)
+    else result = await createSession(effectiveUserId, sessionData, momentRows)
     setSaving(false)
     if (result.error) { setToast({ msg: 'Error al guardar.', type: 'error' }); return null }
     if (!isEdit && result.data) setSessionId(result.data.id)
@@ -155,7 +155,7 @@ export function TrainingEditorPage() {
   async function onExportPDF(formData: SessionFormData) {
     const session: TrainingSession = {
       ...(formData as SessionFormData),
-      id: sessionId ?? 'preview', user_id: profile?.id ?? '',
+      id: sessionId ?? 'preview', user_id: effectiveUserId ?? '',
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
@@ -165,7 +165,7 @@ export function TrainingEditorPage() {
   function onPreview(formData: SessionFormData) {
     const session: TrainingSession = {
       ...(formData as SessionFormData),
-      id: sessionId ?? 'preview', user_id: profile?.id ?? '',
+      id: sessionId ?? 'preview', user_id: effectiveUserId ?? '',
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
@@ -272,7 +272,7 @@ export function TrainingEditorPage() {
                     onChange={updated => updateMoment(m.id, updated)}
                     onRemove={() => removeMoment(m.id)}
                     onMoveUp={() => moveUp(i)} onMoveDown={() => moveDown(i)}
-                    userId={profile?.id ?? ''}/>
+                    userId={effectiveUserId ?? ''}/>
                 ))}
               </div>
             </SortableContext>
