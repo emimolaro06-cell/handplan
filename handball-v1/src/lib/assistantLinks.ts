@@ -31,7 +31,7 @@ export async function linkAssistantByUsername(coachId: string, username: string)
   const { data: assistantProfile, error: profileError } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', username.toLowerCase().trim())
+    .ilike('username', username.trim())
     .single()
   if (profileError || !assistantProfile) {
     throw new Error('No se encontró un perfil con ese nombre de usuario.')
