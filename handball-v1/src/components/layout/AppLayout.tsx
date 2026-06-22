@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, BookOpen, Dumbbell,
-  LogOut, Menu, X, ChevronRight, CalendarDays,
+  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/biblioteca',    icon: BookOpen,         label: 'Biblioteca' },
   { to: '/ejercicios',    icon: Dumbbell,         label: 'Ejercicios' },
   { to: '/planificacion', icon: CalendarDays,     label: 'Planificación mensual' },
+  { to: '/asistencia',    icon: UserCheck,        label: 'Asistencia' },
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
