@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, BookOpen, Dumbbell,
-  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck,
+  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck, Users,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -19,7 +19,10 @@ const NAV = [
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const { profile, selectedCategory, setSelectedCategory, sidebarOpen, setSidebarOpen } = useAppStore()
+  const {
+    profile, selectedCategory, setSelectedCategory, sidebarOpen, setSidebarOpen,
+    effectiveCategories, assistantOfCoachName,
+  } = useAppStore()
   const navigate = useNavigate()
 
   async function handleLogout() {
@@ -58,12 +61,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+        {/* Banner: estoy operando como Ayudante Técnico de otro coach */}
+        {assistantOfCoachName && (
+          <div className="px-4 py-2.5 bg-amber-400/20 border-b border-amber-400/20">
+            <p className="text-xs text-amber-200 leading-snug">
+              Estás viendo los datos de <span className="font-bold">{assistantOfCoachName}</span>
+            </p>
+          </div>
+        )}
+
         {/* Categorías */}
         {profile && (
           <div className="px-4 py-4 border-b border-white/10">
-            <p className="text-xs text-white/40 uppercase tracking-wider mb-2 px-1">Mi categoría</p>
+            <p className="text-xs text-white/40 uppercase tracking-wider mb-2 px-1">
+              {assistantOfCoachName ? 'Categoría' : 'Mi categoría'}
+            </p>
             <div className="space-y-1">
-              {profile.categories.map((cat: TeamCategory) => (
+              {effectiveCategories.map((cat: TeamCategory) => (
                 <button key={cat}
                   onClick={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
                   className={clsx(
@@ -96,6 +110,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {label}
             </NavLink>
           ))}
+          {/* Solo el coach principal gestiona su AT, no el AT mismo */}
+          {!assistantOfCoachName && (
+            <NavLink to="/mi-ayudante"
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) => clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors mt-2 border border-white/10',
+                isActive
+                  ? 'bg-gold-400/20 text-gold-300 font-semibold'
+                  : 'text-white/50 hover:text-white hover:bg-white/10',
+              )}>
+              <Users size={17}/>
+              Mi ayudante técnico
+            </NavLink>
+          )}
         </nav>
 
         {/* Perfil */}
