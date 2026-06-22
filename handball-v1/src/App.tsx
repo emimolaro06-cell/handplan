@@ -15,6 +15,7 @@ import { ExercisesPage }         from '@/pages/ExercisesPage'
 import { MonthlyPlanPage }       from '@/pages/MonthlyPlanPage'
 import { SharedSessionPage }     from '@/pages/SharedSessionPage'
 import { SharedMicrocyclePage }  from '@/pages/SharedMicrocyclePage'
+import { AttendancePage }        from '@/pages/AttendancePage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
         <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
         <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
+        <Route path="/asistencia"        element={<WithLayout><AttendancePage/></WithLayout>}/>
 
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
