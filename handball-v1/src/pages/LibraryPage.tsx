@@ -17,7 +17,7 @@ import type { TrainingSession, LibraryFilters, TeamCategory } from '@/types'
 
 export function LibraryPage() {
   const navigate = useNavigate()
-  const { profile } = useAppStore()
+  const { profile, effectiveUserId } = useAppStore()
 
   const [sessions, setSessions]   = useState<TrainingSession[]>([])
   const [coaches,  setCoaches]    = useState<string[]>([])
@@ -35,10 +35,10 @@ export function LibraryPage() {
   const [totalOwnSessions, setTotalOwnSessions] = useState(0)
 
   useEffect(() => {
-    if (!profile) return
+    if (!effectiveUserId) return
     setLoading(true)
     Promise.all([
-      getSessions(profile.id, {
+      getSessions(effectiveUserId!, {
         team_category:    filters.team_category    || undefined,
         content_category: filters.content_category || undefined,
         coach_name:       filters.coach_name       || undefined,
@@ -52,17 +52,17 @@ export function LibraryPage() {
       setCoaches(((c as { full_name: string }[]) ?? []).map(x => x.full_name))
       setLoading(false)
     })
-  }, [profile, filters])
+  }, [effectiveUserId, filters])
 
   // Conteo total de TODAS mis sesiones (sin filtros), para el modal de borrado masivo
   useEffect(() => {
-    if (!profile) return
+    if (!effectiveUserId) return
     supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', profile.id)
+      .eq('user_id', effectiveUserId)
       .then(({ count }) => setTotalOwnSessions(count ?? 0))
-  }, [profile, sessions])
+  }, [effectiveUserId, sessions])
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este entrenamiento? No se puede deshacer.')) return
@@ -73,17 +73,17 @@ export function LibraryPage() {
   }
 
   async function handleDuplicate(s: TrainingSession) {
-    if (!profile) return
-    const { data, error } = await duplicateSession(s.id, profile.id)
+    if (!effectiveUserId) return
+    const { data, error } = await duplicateSession(s.id, effectiveUserId!)
     if (error || !data) { setToast({ msg: 'Error al duplicar.', type: 'error' }); return }
     setToast({ msg: 'Duplicado. Abriendo editor...', type: 'success' })
     setTimeout(() => navigate(`/entrenamiento/${data.id}`), 800)
   }
 
   async function handleDeleteAll() {
-    if (!profile) return
+    if (!effectiveUserId) return
     setDeletingAll(true)
-    const { error } = await supabase.from('training_sessions').delete().eq('user_id', profile.id)
+    const { error } = await supabase.from('training_sessions').delete().eq('user_id', effectiveUserId)
     setDeletingAll(false)
     setShowDeleteAll(false)
     if (error) { setToast({ msg: 'Error al borrar las sesiones.', type: 'error' }); return }
