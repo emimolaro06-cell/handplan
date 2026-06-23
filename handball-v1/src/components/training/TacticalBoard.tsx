@@ -390,25 +390,25 @@ export function TacticalBoard({ onSave, onClose }: {
           <div className="flex gap-2 items-center flex-wrap">
             <div className="flex gap-1 bg-white/10 rounded-xl p-1">
               {(['full','half-left','half-right'] as CourtMode[]).map((m,i) => (
-                <button key={m} onClick={()=>setM(m)}
+                <button type="button" key={m} onClick={()=>setM(m)}
                   className={clsx('text-xs px-2.5 py-1.5 rounded-lg transition-colors',
                     court2===m?'bg-dj-600 text-white font-semibold':'text-white/60 hover:text-white')}>
                   {['Completa','Mitad izq.','Mitad der.'][i]}
                 </button>
               ))}
             </div>
-            <button onClick={undo} disabled={histIdx.current===0}
+            <button type="button" onClick={undo} disabled={histIdx.current===0}
               className="text-white/50 hover:text-white disabled:opacity-20 p-1.5 rounded-lg hover:bg-white/10" title="Deshacer">
               <RotateCcw size={16}/>
             </button>
-            <button onClick={clear} className="text-white/50 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10" title="Limpiar">
+            <button type="button" onClick={clear} className="text-white/50 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10" title="Limpiar">
               <Trash2 size={16}/>
             </button>
-            <button onClick={()=>onSave(cvRef.current!.toDataURL('image/png'))}
+            <button type="button" onClick={()=>onSave(cvRef.current!.toDataURL('image/png'))}
               className="bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
               <Download size={14}/> Guardar
             </button>
-            <button onClick={onClose} className="text-white/50 hover:text-white p-1.5 rounded-lg hover:bg-white/10">
+            <button type="button" onClick={onClose} className="text-white/50 hover:text-white p-1.5 rounded-lg hover:bg-white/10">
               <X size={18}/>
             </button>
           </div>
@@ -421,7 +421,7 @@ export function TacticalBoard({ onSave, onClose }: {
               <p className="text-white/40 text-xs mb-1.5 uppercase tracking-wide">Color</p>
               <div className="flex flex-wrap gap-1.5">
                 {COLORS.map(c=>(
-                  <button key={c} onClick={()=>setC(c)} title={c}
+                  <button type="button" key={c} onClick={()=>setC(c)} title={c}
                     className={clsx('w-6 h-6 rounded-full border-2 transition-transform',
                       color===c?'border-white scale-125':'border-transparent hover:scale-110')}
                     style={{backgroundColor:c}}/>
@@ -429,14 +429,14 @@ export function TacticalBoard({ onSave, onClose }: {
               </div>
             </div>
             {TOOLS.map(t=>(
-              <button key={t.id} onClick={()=>setT(t.id)}
+              <button type="button" key={t.id} onClick={()=>setT(t.id)}
                 className={clsx('flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-all text-left',
                   tool===t.id?'bg-dj-600 text-white font-semibold':'text-white/60 hover:text-white hover:bg-white/10')}>
                 <span className="w-5 flex items-center justify-center flex-shrink-0">{t.el}</span>
                 <span className="leading-tight">{t.label}</span>
               </button>
             ))}
-            <button onClick={toggleEdit}
+            <button type="button" onClick={toggleEdit}
               className={clsx('mt-1 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-all text-left border',
                 editMode.current?'border-dj-500 text-dj-300 bg-dj-900/60':'border-white/10 text-white/40 hover:text-white/60')}>
               <span className="w-5 flex items-center justify-center">
