@@ -6,7 +6,7 @@ import {
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { signOut } from '@/lib/supabase'
-import { TEAM_CATEGORY_BG, CLUB_NAME } from '@/lib/constants'
+import { TEAM_CATEGORY_BG } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
 
 const NAV = [
@@ -18,9 +18,18 @@ const NAV = [
   { to: '/asistencia',    icon: UserCheck,        label: 'Asistencia' },
 ]
 
+// Oscurece un color hex un porcentaje dado (0-1), para variantes más oscuras sin clases fijas
+function shade(hex: string, amount: number): string {
+  const h = hex.replace('#', '')
+  const r = Math.max(0, Math.round(parseInt(h.slice(0, 2), 16) * (1 - amount)))
+  const g = Math.max(0, Math.round(parseInt(h.slice(2, 4), 16) * (1 - amount)))
+  const b = Math.max(0, Math.round(parseInt(h.slice(4, 6), 16) * (1 - amount)))
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const {
-    profile, selectedCategory, setSelectedCategory, sidebarOpen, setSidebarOpen,
+    profile, account, selectedCategory, setSelectedCategory, sidebarOpen, setSidebarOpen,
     effectiveCategories, assistantOfCoachName,
   } = useAppStore()
   const navigate = useNavigate()
@@ -31,7 +40,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const initials = profile?.full_name
-    .split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() ?? 'DJ'
+    .split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() ?? '••'
+
+  const color = account?.primary_color || '#1e8a1e'
+  const colorDark = shade(color, 0.55)   // fondo del sidebar
+  const colorDarker = shade(color, 0.65) // header mobile
+  const accountName = account?.name || 'HandPlan'
+  const logoUrl = account?.logo_url || '/logo-handplan.svg'
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -39,21 +54,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setSidebarOpen(false)}/>
       )}
 
-      <aside className={clsx(
-        'fixed top-0 left-0 h-full w-64 z-30 flex flex-col',
-        'bg-dj-900 text-white transition-transform duration-200 ease-in-out',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        'lg:translate-x-0 lg:static lg:z-auto',
-      )}>
+      <aside
+        className={clsx(
+          'fixed top-0 left-0 h-full w-64 z-30 flex flex-col text-white',
+          'transition-transform duration-200 ease-in-out',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'lg:translate-x-0 lg:static lg:z-auto',
+        )}
+        style={{ backgroundColor: colorDark }}
+      >
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-              <img src="/logo-dj.png" alt="Logo" className="w-full h-full object-contain"/>
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-white/10 flex items-center justify-center">
+              <img src={logoUrl} alt={accountName} className="w-full h-full object-contain"/>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-gold-400 leading-tight uppercase tracking-wide">Handball</p>
-              <p className="text-xs text-white/60 leading-tight truncate">Defensa y Justicia</p>
+              <p className="text-sm font-bold text-white leading-tight truncate">{accountName}</p>
+              <p className="text-xs text-white/50 leading-tight">HandPlan</p>
             </div>
             <button className="lg:hidden text-white/50 hover:text-white" onClick={() => setSidebarOpen(false)}>
               <X size={18}/>
@@ -103,7 +121,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               className={({ isActive }) => clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors',
                 isActive
-                  ? 'bg-gold-400/20 text-gold-300 font-semibold'
+                  ? 'bg-white/15 text-white font-semibold'
                   : 'text-white/60 hover:text-white hover:bg-white/10',
               )}>
               <Icon size={17}/>
@@ -117,7 +135,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               className={({ isActive }) => clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors mt-2 border border-white/10',
                 isActive
-                  ? 'bg-gold-400/20 text-gold-300 font-semibold'
+                  ? 'bg-white/15 text-white font-semibold'
                   : 'text-white/50 hover:text-white hover:bg-white/10',
               )}>
               <Users size={17}/>
@@ -131,7 +149,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-4 border-t border-white/10">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{ backgroundColor: profile.avatar_color ?? '#1e8a1e' }}>
+                style={{ backgroundColor: profile.avatar_color ?? color }}>
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -149,11 +167,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-dj-900 sticky top-0 z-10">
+        <header
+          className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
+          style={{ backgroundColor: colorDarker }}
+        >
           <button onClick={() => setSidebarOpen(true)} className="text-white/70 hover:text-white">
             <Menu size={22}/>
           </button>
-          <span className="text-white font-semibold text-sm flex-1">Handball D&J</span>
+          <span className="text-white font-semibold text-sm flex-1 truncate">{accountName}</span>
           {selectedCategory && (
             <span className={clsx('text-xs font-bold text-white px-2.5 py-1 rounded-lg', TEAM_CATEGORY_BG[selectedCategory])}>
               {selectedCategory}
