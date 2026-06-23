@@ -58,46 +58,56 @@ function court(ctx: CanvasRenderingContext2D, mode: CourtMode) {
   ctx.fillStyle = COURT_BG; ctx.fillRect(0,0,W,H)
   ctx.strokeStyle = COURT_LINE; ctx.lineWidth = 2.5
 
+  const halfW = W/2 // ancho de una mitad de cancha completa, referencia para las proporciones
+
   if (mode === 'full') {
     ctx.strokeRect(8,8,W-16,H-16)
     ctx.beginPath(); ctx.moveTo(W/2,8); ctx.lineTo(W/2,H-8); ctx.stroke()
 
     const gY=H/2
+    const r6 = halfW * 0.48   // radio área de portero (6m)
+    const r9 = halfW * 0.68   // radio línea de tiro libre (9m)
     // Área de portero (6m) — línea sólida
-    ctx.beginPath(); ctx.arc(8,gY,150,-1.15,1.15); ctx.stroke()
-    ctx.beginPath(); ctx.arc(W-8,gY,150,Math.PI-1.15,Math.PI+1.15); ctx.stroke()
+    ctx.beginPath(); ctx.arc(8,gY,r6,-1.15,1.15); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,r6,Math.PI-1.15,Math.PI+1.15); ctx.stroke()
     // Línea de tiro libre (9m) — punteada
     ctx.setLineDash([9,7])
-    ctx.beginPath(); ctx.arc(8,gY,210,-1.0,1.0); ctx.stroke()
-    ctx.beginPath(); ctx.arc(W-8,gY,210,Math.PI-1.0,Math.PI+1.0); ctx.stroke()
+    ctx.beginPath(); ctx.arc(8,gY,r9,-1.0,1.0); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,r9,Math.PI-1.0,Math.PI+1.0); ctx.stroke()
     ctx.setLineDash([])
-    // Marcas de 7 metros (penal) — rayitas cortas
-    ctx.beginPath(); ctx.moveTo(8+150-2,gY-7); ctx.lineTo(8+150-2,gY+7); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(W-8-150+2,gY-7); ctx.lineTo(W-8-150+2,gY+7); ctx.stroke()
+    // Marcas de 7 metros (penal) — rayitas cortas, entre la línea de 6m y la de 9m
+    const r7 = (r6+r9)/2
+    ctx.beginPath(); ctx.moveTo(8+r7,gY-7); ctx.lineTo(8+r7,gY+7); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(W-8-r7,gY-7); ctx.lineTo(W-8-r7,gY+7); ctx.stroke()
     // Línea de gol + portería
     const gH=70, gTop=gY-gH/2
     ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
     return
   }
 
-  // Mitad de cancha: se dibuja UN SOLO arco, ocupando todo el ancho disponible
+  // Mitad de cancha: como esta única mitad ocupa todo el ancho del canvas, las proporciones
+  // se calculan sobre W (no halfW) para que se vea agrandada, como pidió el usuario.
   const gY = H/2
+  const r6h = W * 0.46
+  const r9h = W * 0.64
   ctx.strokeRect(8,8,W-16,H-16)
 
   if (mode === 'half-left') {
-    ctx.beginPath(); ctx.arc(8,gY,W-40,-0.62,0.62); ctx.stroke()
+    ctx.beginPath(); ctx.arc(8,gY,r6h,-0.62,0.62); ctx.stroke()
     ctx.setLineDash([9,7])
-    ctx.beginPath(); ctx.arc(8,gY,W-12,-0.52,0.52); ctx.stroke()
+    ctx.beginPath(); ctx.arc(8,gY,r9h,-0.52,0.52); ctx.stroke()
     ctx.setLineDash([])
-    ctx.beginPath(); ctx.moveTo(8+(W-40)-2,gY-7); ctx.lineTo(8+(W-40)-2,gY+7); ctx.stroke()
+    const r7=(r6h+r9h)/2
+    ctx.beginPath(); ctx.moveTo(8+r7,gY-7); ctx.lineTo(8+r7,gY+7); ctx.stroke()
     const gH=70, gTop=gY-gH/2
     ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.lineWidth=2.5
   } else {
-    ctx.beginPath(); ctx.arc(W-8,gY,W-40,Math.PI-0.62,Math.PI+0.62); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,r6h,Math.PI-0.62,Math.PI+0.62); ctx.stroke()
     ctx.setLineDash([9,7])
-    ctx.beginPath(); ctx.arc(W-8,gY,W-12,Math.PI-0.52,Math.PI+0.52); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,r9h,Math.PI-0.52,Math.PI+0.52); ctx.stroke()
     ctx.setLineDash([])
-    ctx.beginPath(); ctx.moveTo(W-8-(W-40)+2,gY-7); ctx.lineTo(W-8-(W-40)+2,gY+7); ctx.stroke()
+    const r7=(r6h+r9h)/2
+    ctx.beginPath(); ctx.moveTo(W-8-r7,gY-7); ctx.lineTo(W-8-r7,gY+7); ctx.stroke()
     const gH=70, gTop=gY-gH/2
     ctx.lineWidth=5; ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
   }
