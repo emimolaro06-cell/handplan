@@ -39,7 +39,7 @@ interface Scene { elems: Elem[]; arrows: Arrow[]; texts: TextElem[] }
 
 // Dimensiones del canvas según el modo: horizontal para 'full', vertical (arco arriba) para las mitades
 function dims(mode: CourtMode) {
-  return mode === 'full' ? { w: 820, h: 500 } : { w: 500, h: 700 }
+  return mode === 'full' ? { w: 820, h: 500 } : { w: 620, h: 700 }
 }
 const HIT = 16  // radio de hit-test en px canvas
 
@@ -97,15 +97,15 @@ function court(ctx: CanvasRenderingContext2D, mode: CourtMode, w: number, h: num
   // en este formato (es la misma media cancha vista de frente), pero se mantiene el selector por
   // si más adelante se quiere espejar contenido específico de cada lado.
   const gX = w/2
-  const r6v = w * 0.62   // radio área de portero (6m), proporcional al ancho del canvas vertical
-  const r9v = w * 0.86   // radio línea de tiro libre (9m)
-  const halfCourtW = gX - 8
+  const r6v = w * 0.46   // radio área de portero (6m), proporcional al ancho del canvas vertical
+  const r9v = w * 0.62   // radio línea de tiro libre (9m)
+  const halfCourtW = gX - 8   // distancia horizontal del centro a cada borde lateral
   const ang6v = Math.asin(Math.min(1, halfCourtW / r6v))
   const ang9v = Math.asin(Math.min(1, halfCourtW / r9v))
 
   ctx.strokeRect(8,8,w-16,h-16)
 
-  // Área de portero (6m) — arco con centro arriba, abriéndose hacia abajo
+  // Área de portero (6m) — arco con centro en la línea de gol, abriéndose hacia abajo
   ctx.beginPath(); ctx.arc(gX,8,r6v, Math.PI/2-ang6v, Math.PI/2+ang6v); ctx.stroke()
   // Línea de tiro libre (9m) — punteada
   ctx.setLineDash([9,7])
