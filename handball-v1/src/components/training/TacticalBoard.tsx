@@ -37,7 +37,10 @@ interface Arrow {
 
 interface Scene { elems: Elem[]; arrows: Arrow[]; texts: TextElem[] }
 
-const W = 820, H = 500
+// Dimensiones del canvas según el modo: horizontal para 'full', vertical (arco arriba) para las mitades
+function dims(mode: CourtMode) {
+  return mode === 'full' ? { w: 820, h: 500 } : { w: 500, h: 700 }
+}
 const HIT = 16  // radio de hit-test en px canvas
 
 const COLORS = [
@@ -54,17 +57,16 @@ function midPt(x1:number,y1:number,x2:number,y2:number,lift=0): Pt {
 const COURT_BG = '#4a85b8'
 const COURT_LINE = '#111111'
 
-function court(ctx: CanvasRenderingContext2D, mode: CourtMode) {
-  ctx.fillStyle = COURT_BG; ctx.fillRect(0,0,W,H)
+function court(ctx: CanvasRenderingContext2D, mode: CourtMode, w: number, h: number) {
+  ctx.fillStyle = COURT_BG; ctx.fillRect(0,0,w,h)
   ctx.strokeStyle = COURT_LINE; ctx.lineWidth = 2.5
 
-  const halfW = W/2 // ancho de una mitad de cancha completa, referencia para las proporciones
-
   if (mode === 'full') {
-    ctx.strokeRect(8,8,W-16,H-16)
-    ctx.beginPath(); ctx.moveTo(W/2,8); ctx.lineTo(W/2,H-8); ctx.stroke()
+    const halfW = w/2
+    ctx.strokeRect(8,8,w-16,h-16)
+    ctx.beginPath(); ctx.moveTo(w/2,8); ctx.lineTo(w/2,h-8); ctx.stroke()
 
-    const gY=H/2
+    const gY=h/2
     const r6 = halfW * 0.42   // radio área de portero (6m)
     const r9 = halfW * 0.58   // radio línea de tiro libre (9m) — con más margen respecto al medio
     // Ángulo exacto para que cada arco llegue justo a la línea de fondo (arriba y abajo), cerrándolo
@@ -74,51 +76,47 @@ function court(ctx: CanvasRenderingContext2D, mode: CourtMode) {
 
     // Área de portero (6m) — línea sólida, cerrada contra la línea de fondo
     ctx.beginPath(); ctx.arc(8,gY,r6,-ang6,ang6); ctx.stroke()
-    ctx.beginPath(); ctx.arc(W-8,gY,r6,Math.PI-ang6,Math.PI+ang6); ctx.stroke()
+    ctx.beginPath(); ctx.arc(w-8,gY,r6,Math.PI-ang6,Math.PI+ang6); ctx.stroke()
     // Línea de tiro libre (9m) — punteada, cerrada contra la línea de fondo
     ctx.setLineDash([9,7])
     ctx.beginPath(); ctx.arc(8,gY,r9,-ang9,ang9); ctx.stroke()
-    ctx.beginPath(); ctx.arc(W-8,gY,r9,Math.PI-ang9,Math.PI+ang9); ctx.stroke()
+    ctx.beginPath(); ctx.arc(w-8,gY,r9,Math.PI-ang9,Math.PI+ang9); ctx.stroke()
     ctx.setLineDash([])
     // Marcas de 7 metros (penal) — rayitas cortas, entre la línea de 6m y la de 9m
     const r7 = (r6+r9)/2
     ctx.beginPath(); ctx.moveTo(8+r7,gY-7); ctx.lineTo(8+r7,gY+7); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(W-8-r7,gY-7); ctx.lineTo(W-8-r7,gY+7); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(w-8-r7,gY-7); ctx.lineTo(w-8-r7,gY+7); ctx.stroke()
     // Línea de gol + portería
     const gH=70, gTop=gY-gH/2
-    ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
+    ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.strokeRect(w-12,gTop,12,gH); ctx.lineWidth=2.5
     return
   }
 
-  // Mitad de cancha: como esta única mitad ocupa todo el ancho del canvas, las proporciones
-  // se calculan sobre W (no halfW) para que se vea agrandada, como pidió el usuario.
-  const gY = H/2
-  const r6h = W * 0.40
-  const r9h = W * 0.54
-  const halfCourtH = gY - 8
-  const ang6h = Math.asin(Math.min(1, halfCourtH / r6h))
-  const ang9h = Math.asin(Math.min(1, halfCourtH / r9h))
-  ctx.strokeRect(8,8,W-16,H-16)
+  // Mitad de cancha VERTICAL: el arco queda arriba (y=8), la cancha se extiende hacia abajo.
+  // Mismo arco para half-left y half-right — la diferencia entre ambos modos no aplica visualmente
+  // en este formato (es la misma media cancha vista de frente), pero se mantiene el selector por
+  // si más adelante se quiere espejar contenido específico de cada lado.
+  const gX = w/2
+  const r6v = w * 0.62   // radio área de portero (6m), proporcional al ancho del canvas vertical
+  const r9v = w * 0.86   // radio línea de tiro libre (9m)
+  const halfCourtW = gX - 8
+  const ang6v = Math.asin(Math.min(1, halfCourtW / r6v))
+  const ang9v = Math.asin(Math.min(1, halfCourtW / r9v))
 
-  if (mode === 'half-left') {
-    ctx.beginPath(); ctx.arc(8,gY,r6h,-ang6h,ang6h); ctx.stroke()
-    ctx.setLineDash([9,7])
-    ctx.beginPath(); ctx.arc(8,gY,r9h,-ang9h,ang9h); ctx.stroke()
-    ctx.setLineDash([])
-    const r7=(r6h+r9h)/2
-    ctx.beginPath(); ctx.moveTo(8+r7,gY-7); ctx.lineTo(8+r7,gY+7); ctx.stroke()
-    const gH=70, gTop=gY-gH/2
-    ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.lineWidth=2.5
-  } else {
-    ctx.beginPath(); ctx.arc(W-8,gY,r6h,Math.PI-ang6h,Math.PI+ang6h); ctx.stroke()
-    ctx.setLineDash([9,7])
-    ctx.beginPath(); ctx.arc(W-8,gY,r9h,Math.PI-ang9h,Math.PI+ang9h); ctx.stroke()
-    ctx.setLineDash([])
-    const r7=(r6h+r9h)/2
-    ctx.beginPath(); ctx.moveTo(W-8-r7,gY-7); ctx.lineTo(W-8-r7,gY+7); ctx.stroke()
-    const gH=70, gTop=gY-gH/2
-    ctx.lineWidth=5; ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
-  }
+  ctx.strokeRect(8,8,w-16,h-16)
+
+  // Área de portero (6m) — arco con centro arriba, abriéndose hacia abajo
+  ctx.beginPath(); ctx.arc(gX,8,r6v, Math.PI/2-ang6v, Math.PI/2+ang6v); ctx.stroke()
+  // Línea de tiro libre (9m) — punteada
+  ctx.setLineDash([9,7])
+  ctx.beginPath(); ctx.arc(gX,8,r9v, Math.PI/2-ang9v, Math.PI/2+ang9v); ctx.stroke()
+  ctx.setLineDash([])
+  // Marca de 7 metros (penal)
+  const r7v = (r6v+r9v)/2
+  ctx.beginPath(); ctx.moveTo(gX-7,8+r7v); ctx.lineTo(gX+7,8+r7v); ctx.stroke()
+  // Línea de gol + portería (horizontal, pegada arriba)
+  const gW=70, gLeft=gX-gW/2
+  ctx.lineWidth=5; ctx.strokeRect(gLeft,0,gW,12); ctx.lineWidth=2.5
 }
 
 function arrowShape(ctx: CanvasRenderingContext2D, a: Arrow, alpha=1, sel=false) {
@@ -235,10 +233,12 @@ export function TacticalBoard({ onSave, onClose }: {
   // ─── Paint ─────────────────────────────────────────────────────────────────
   function paint(s?: Scene) {
     const cv=cvRef.current; if (!cv) return
+    const { w, h } = dims(courtRef.current)
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h }
     const ctx=cv.getContext('2d')!
     const sc = s ?? scene.current
-    ctx.clearRect(0,0,W,H)
-    court(ctx, courtRef.current)
+    ctx.clearRect(0,0,w,h)
+    court(ctx, courtRef.current, w, h)
     sc.arrows.forEach(a => arrowShape(ctx, a, 1, a.id===selArrowId.current))
     if (editMode.current) {
       sc.arrows.forEach(a => {
@@ -284,8 +284,9 @@ export function TacticalBoard({ onSave, onClose }: {
 
   // ─── Canvas coords ─────────────────────────────────────────────────────────
   function pos(e: React.MouseEvent<HTMLCanvasElement>): Pt {
-    const r=cvRef.current!.getBoundingClientRect()
-    return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }
+    const cv = cvRef.current!
+    const r = cv.getBoundingClientRect()
+    return { x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height) }
   }
 
   // ─── Hit tests ─────────────────────────────────────────────────────────────
@@ -422,7 +423,7 @@ export function TacticalBoard({ onSave, onClose }: {
     if (d.what==='drawing') {
       // preview
       const cv=cvRef.current!; const ctx=cv.getContext('2d')!
-      ctx.clearRect(0,0,W,H); court(ctx,courtRef.current)
+      ctx.clearRect(0,0,cv.width,cv.height); court(ctx,courtRef.current,cv.width,cv.height)
       s.arrows.forEach(a=>arrowShape(ctx,a))
       if (editMode.current) s.arrows.forEach(a=>{
         handle(ctx,a.x1,a.y1,'#fff',a.color); handle(ctx,a.x2,a.y2,'#fff',a.color)
@@ -577,9 +578,9 @@ export function TacticalBoard({ onSave, onClose }: {
 
           {/* Canvas */}
           <div className="flex-1 p-3 flex items-center justify-center bg-gray-800/30">
-            <canvas ref={cvRef} width={W} height={H}
-              className="rounded-xl w-full select-none"
-              style={{cursor, maxHeight:'72vh'}}
+            <canvas ref={cvRef} width={dims(court2).w} height={dims(court2).h}
+              className="rounded-xl select-none"
+              style={{cursor, maxHeight:'72vh', maxWidth:'100%'}}
               onMouseDown={down} onMouseMove={move} onMouseUp={up}
               onMouseLeave={e=>{if(drag.current.what!=='none')up(e)}}
             />
