@@ -35,6 +35,7 @@ export interface Profile {
   categories: TeamCategory[]
   club_name: string
   avatar_color: string
+  account_id: string | null
   created_at: string
 }
 
