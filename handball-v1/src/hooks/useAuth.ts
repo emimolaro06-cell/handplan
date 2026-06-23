@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, getProfile } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
+import { getAccountById } from '@/lib/accounts'
 
 // Resuelve, para el usuario logueado, qué user_id debe usarse para leer/escribir datos:
 // - Si NO es un Ayudante Técnico vinculado: su propio id (caso normal, coach trabajando con lo suyo).
@@ -31,23 +32,34 @@ async function resolveEffectiveUser(userId: string, ownCategories: string[]) {
 
 export function useAuth() {
   const {
-    profile, setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories,
+    profile, setProfile, account, setAccount,
+    setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories,
   } = useAppStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    async function applyProfile(userId: string, data: any) {
+      setProfile(data)
+      const { effectiveUserId, assistantOfCoachName, effectiveCategories } =
+        await resolveEffectiveUser(userId, data.categories ?? [])
+      setEffectiveUserId(effectiveUserId)
+      setAssistantOfCoachName(assistantOfCoachName)
+      setEffectiveCategories(effectiveCategories)
+
+      // Si todavía no hay una Cuenta reconocida en el store (ej: el usuario entró
+      // directo con sesión guardada, sin pasar por la pantalla de código), la resolvemos
+      // a partir del account_id del perfil — así la identidad visual siempre aparece.
+      if (!account && data.account_id) {
+        const acc = await getAccountById(data.account_id)
+        if (acc) setAccount(acc)
+      }
+    }
+
     // Sesión inicial al cargar
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const { data } = await getProfile(session.user.id)
-        if (data) {
-          setProfile(data)
-          const { effectiveUserId, assistantOfCoachName, effectiveCategories } =
-            await resolveEffectiveUser(session.user.id, data.categories ?? [])
-          setEffectiveUserId(effectiveUserId)
-          setAssistantOfCoachName(assistantOfCoachName)
-          setEffectiveCategories(effectiveCategories)
-        }
+        if (data) await applyProfile(session.user.id, data)
       }
       setLoading(false)
     })
@@ -57,14 +69,7 @@ export function useAuth() {
       async (_event, session) => {
         if (session?.user) {
           const { data } = await getProfile(session.user.id)
-          if (data) {
-            setProfile(data)
-            const { effectiveUserId, assistantOfCoachName, effectiveCategories } =
-              await resolveEffectiveUser(session.user.id, data.categories ?? [])
-            setEffectiveUserId(effectiveUserId)
-            setAssistantOfCoachName(assistantOfCoachName)
-            setEffectiveCategories(effectiveCategories)
-          }
+          if (data) await applyProfile(session.user.id, data)
         } else {
           setProfile(null)
           setEffectiveUserId(null)
@@ -74,7 +79,8 @@ export function useAuth() {
       }
     )
     return () => subscription.unsubscribe()
-  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setAccount])
 
   return { profile, loading }
 }
