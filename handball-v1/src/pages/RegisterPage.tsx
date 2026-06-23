@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { ArrowLeft, Check, Shield } from 'lucide-react'
 import { signUpWithUsername, supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import { TEAM_CATEGORIES, AVATAR_COLORS, CLUB_NAME } from '@/lib/constants'
+import { TEAM_CATEGORIES, AVATAR_COLORS } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
 
 const ADMIN_CODE = 'ADMIN2026'
@@ -17,7 +17,7 @@ interface RegForm {
 
 export function RegisterPage() {
   const navigate = useNavigate()
-  const setProfile = useAppStore(s => s.setProfile)
+  const { setProfile, account } = useAppStore()
   const [selectedCats, setSelectedCats] = useState<TeamCategory[]>([])
   const [serverError, setServerError] = useState<string | null>(null)
   const [showAdminCode, setShowAdminCode] = useState(false)
@@ -31,16 +31,26 @@ export function RegisterPage() {
   }
 
   async function onSubmit({ full_name, username, admin_code }: RegForm) {
+    if (!account) { setServerError('No se reconoció ninguna cuenta. Volvé a ingresar tu código.'); return }
     if (selectedCats.length === 0) { setServerError('Seleccioná al menos una categoría.'); return }
     setServerError(null)
 
     const isAdmin = admin_code?.trim() === ADMIN_CODE
     const role = isAdmin ? 'admin' : 'coach'
-    const autoPassword = `DYJ_${username}_2025`
+
+    // El patrón de credenciales se deriva del access_code de la cuenta, así cada cuenta nueva
+    // tiene el suyo propio automáticamente. Para Defensa y Justicia se mantiene EXACTAMENTE
+    // el patrón original (@hbdj.internal / DYJ_..._2025) para no romper nada ya creado.
+    const isLegacyDyJ = account.access_code === 'DYJHANDBALL2025'
+    const autoPassword = isLegacyDyJ
+      ? `DYJ_${username}_2025`
+      : `${account.access_code}_${username}`
+    const emailDomain = isLegacyDyJ ? 'hbdj.internal' : `${account.access_code.toLowerCase()}.internal`
+
     const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
 
     const { data, error } = await signUpWithUsername(username, autoPassword, {
-      full_name, role, club_name: CLUB_NAME, avatar_color: avatarColor,
+      full_name, role, club_name: account.name, avatar_color: avatarColor, email_domain: emailDomain,
     })
 
     if (error || !data.user) {
@@ -49,7 +59,7 @@ export function RegisterPage() {
     }
 
     await supabase.from('profiles')
-      .update({ categories: selectedCats, avatar_color: avatarColor, role })
+      .update({ categories: selectedCats, avatar_color: avatarColor, role, account_id: account.id })
       .eq('id', data.user.id)
 
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
@@ -57,21 +67,22 @@ export function RegisterPage() {
   }
 
   const baseCats = ['Minis', 'Infantiles', 'Menores', 'Cadetes', 'Juveniles', 'Primera']
+  const color = account?.primary_color || '#1e8a1e'
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #072d07 0%, #1e8a1e 50%, #0d420d 100%)' }}>
+      style={{ background: `linear-gradient(135deg, ${color}33 0%, ${color} 50%, ${color}cc 100%)` }}>
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate('/')} className="text-white/60 hover:text-white"><ArrowLeft size={20}/></button>
           <div>
-            <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">{CLUB_NAME}</p>
+            <p className="text-white/70 text-xs font-bold uppercase tracking-widest">{account?.name}</p>
             <h1 className="text-xl font-bold text-white font-display">Crear perfil</h1>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-dj-700 via-gold-400 to-dj-700"/>
+          <div className="h-1.5" style={{ background: `linear-gradient(to right, ${color}, ${color}aa, ${color})` }}/>
           <div className="p-6">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="flex flex-col gap-1">
