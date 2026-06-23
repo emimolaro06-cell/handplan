@@ -3,26 +3,28 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Trash2, X } from 'lucide-react'
 import { supabase, getProfile } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import { CLUB_NAME } from '@/lib/constants'
 import { Spinner } from '@/components/ui/index'
 import type { Profile } from '@/types'
 
 export function ProfilesPage() {
   const navigate = useNavigate()
-  const { setProfile } = useAppStore()
+  const { setProfile, account } = useAppStore()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    if (!account) { navigate('/', { replace: true }); return }
     loadProfiles()
-  }, [])
+  }, [account])
 
   function loadProfiles() {
+    if (!account) return
     supabase
       .from('profiles')
       .select('*')
+      .eq('account_id', account.id)
       .order('full_name')
       .then(({ data }) => {
         setProfiles((data as Profile[]) ?? [])
@@ -31,9 +33,18 @@ export function ProfilesPage() {
   }
 
   async function handleSelectProfile(profile: Profile) {
-    // Sign in automático con las credenciales generadas
-    const autoPassword = `DYJ_${profile.username}_2025`
-    const email = `${profile.username.toLowerCase().trim()}@hbdj.internal`
+    if (!account) return
+    // El dominio interno y el prefijo de contraseña se derivan del access_code de la cuenta,
+    // así cada cuenta nueva tiene su propio patrón automáticamente. Para Defensa y Justicia
+    // (access_code = DYJHANDBALL2025) esto reproduce EXACTAMENTE el patrón ya existente
+    // (@hbdj.internal / DYJ_..._2025), sin romper el acceso de ningún perfil ya creado.
+    const isLegacyDyJ = account.access_code === 'DYJHANDBALL2025'
+    const email = isLegacyDyJ
+      ? `${profile.username.toLowerCase().trim()}@hbdj.internal`
+      : `${profile.username.toLowerCase().trim()}@${account.access_code.toLowerCase()}.internal`
+    const autoPassword = isLegacyDyJ
+      ? `DYJ_${profile.username}_2025`
+      : `${account.access_code}_${profile.username}`
 
     const { error } = await supabase.auth.signInWithPassword({ email, password: autoPassword })
     if (error) {
@@ -66,10 +77,12 @@ export function ProfilesPage() {
     return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
   }
 
+  const color = account?.primary_color || '#1e8a1e'
+
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #072d07 0%, #1e8a1e 50%, #0d420d 100%)' }}
+      style={{ background: `linear-gradient(135deg, ${color}33 0%, ${color} 50%, ${color}cc 100%)` }}
     >
       <div className="w-full max-w-lg">
         {/* Header */}
@@ -78,7 +91,7 @@ export function ProfilesPage() {
             <ArrowLeft size={20}/>
           </button>
           <div>
-            <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">{CLUB_NAME}</p>
+            <p className="text-white/70 text-xs font-bold uppercase tracking-widest">{account?.name}</p>
             <h1 className="text-xl font-bold text-white font-display">¿Quién sos?</h1>
           </div>
         </div>
@@ -90,7 +103,7 @@ export function ProfilesPage() {
             <p className="text-white/60 text-sm">No hay perfiles todavía.</p>
             <button
               onClick={() => navigate('/registro')}
-              className="mt-4 text-gold-400 hover:text-gold-300 text-sm font-medium underline"
+              className="mt-4 text-white hover:text-white/80 text-sm font-medium underline"
             >
               Crear el primero
             </button>
@@ -101,12 +114,12 @@ export function ProfilesPage() {
               <div key={profile.id} className="relative group">
                 <button
                   onClick={() => handleSelectProfile(profile)}
-                  className="w-full flex flex-col items-center gap-3 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-gold-400 rounded-2xl p-5 text-center transition-all active:scale-[0.97]"
+                  className="w-full flex flex-col items-center gap-3 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white rounded-2xl p-5 text-center transition-all active:scale-[0.97]"
                 >
                   {/* Avatar */}
                   <div
                     className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg group-hover:scale-105 transition-transform"
-                    style={{ backgroundColor: profile.avatar_color ?? '#1e8a1e' }}
+                    style={{ backgroundColor: profile.avatar_color ?? color }}
                   >
                     {getInitials(profile.full_name)}
                   </div>
@@ -182,3 +195,4 @@ export function ProfilesPage() {
     </div>
   )
 }
+
