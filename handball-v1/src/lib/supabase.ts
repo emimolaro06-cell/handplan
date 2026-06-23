@@ -13,13 +13,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnon)
 
 // ─── Auth: username → email interno ─────────────────────────────────────────
 // El email real nunca lo ve el entrenador.
-// Se construye como: username@hbdj.internal
-function toEmail(username: string) {
-  return `${username.toLowerCase().trim().replace(/\s+/g, '_')}@hbdj.internal`
+// Se construye como: username@{domain}.internal — el dominio por defecto es 'hbdj.internal'
+// para mantener compatibilidad exacta con los perfiles ya creados de Defensa y Justicia.
+function toEmail(username: string, domain: string = 'hbdj.internal') {
+  return `${username.toLowerCase().trim().replace(/\s+/g, '_')}@${domain}`
 }
 
-export async function signInWithUsername(username: string, password: string) {
-  const email = toEmail(username)
+export async function signInWithUsername(username: string, password: string, domain?: string) {
+  const email = toEmail(username, domain)
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   return { data, error }
 }
@@ -27,13 +28,14 @@ export async function signInWithUsername(username: string, password: string) {
 export async function signUpWithUsername(
   username: string,
   password: string,
-  meta: { full_name: string; role: string; club_name: string; avatar_color: string }
+  meta: { full_name: string; role: string; club_name: string; avatar_color: string; email_domain?: string }
 ) {
-  const email = toEmail(username)
+  const email = toEmail(username, meta.email_domain)
+  const { email_domain, ...restMeta } = meta
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { username, ...meta } },
+    options: { data: { username, ...restMeta } },
   })
   return { data, error }
 }
