@@ -5,7 +5,7 @@ import { clsx } from '@/lib/utils'
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tool =
   | 'select' | 'player-own' | 'player-rival' | 'goalkeeper'
-  | 'cone' | 'ball' | 'mannequin'
+  | 'cone' | 'ball' | 'mannequin' | 'text'
   | 'arrow-solid' | 'arrow-dash' | 'arrow-curve' | 'line' | 'eraser'
 
 type CourtMode = 'full' | 'half-left' | 'half-right'
@@ -18,6 +18,14 @@ interface Elem {
   x: number; y: number; n?: number
 }
 
+interface TextElem {
+  id: string
+  kind: 'text'
+  x: number; y: number
+  text: string
+  color: string
+}
+
 interface Arrow {
   id: string
   kind: 'arrow-solid' | 'arrow-dash' | 'arrow-curve' | 'line'
@@ -27,7 +35,7 @@ interface Arrow {
   color: string
 }
 
-interface Scene { elems: Elem[]; arrows: Arrow[] }
+interface Scene { elems: Elem[]; arrows: Arrow[]; texts: TextElem[] }
 
 const W = 820, H = 500
 const HIT = 16  // radio de hit-test en px canvas
@@ -43,28 +51,61 @@ function midPt(x1:number,y1:number,x2:number,y2:number,lift=0): Pt {
 }
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
+const COURT_BG = '#4a85b8'
+const COURT_LINE = '#111111'
+
 function court(ctx: CanvasRenderingContext2D, mode: CourtMode) {
-  ctx.fillStyle = '#2d7a2d'; ctx.fillRect(0,0,W,H)
-  if (mode==='half-left')  { ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(W/2,0,W/2,H) }
-  if (mode==='half-right') { ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,W/2,H) }
+  ctx.fillStyle = COURT_BG; ctx.fillRect(0,0,W,H)
+  ctx.strokeStyle = COURT_LINE; ctx.lineWidth = 2.5
 
-  ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=2
-  ctx.strokeRect(16,16,W-32,H-32)
-  ctx.beginPath(); ctx.moveTo(W/2,16); ctx.lineTo(W/2,H-16); ctx.stroke()
+  if (mode === 'full') {
+    ctx.strokeRect(8,8,W-16,H-16)
+    ctx.beginPath(); ctx.moveTo(W/2,8); ctx.lineTo(W/2,H-8); ctx.stroke()
 
-  const gY=H/2
-  ctx.beginPath(); ctx.arc(16,gY,150,-1.15,1.15); ctx.stroke()
-  ctx.beginPath(); ctx.arc(W-16,gY,150,Math.PI-1.15,Math.PI+1.15); ctx.stroke()
-  ctx.setLineDash([8,6])
-  ctx.beginPath(); ctx.arc(16,gY,210,-1.0,1.0); ctx.stroke()
-  ctx.beginPath(); ctx.arc(W-16,gY,210,Math.PI-1.0,Math.PI+1.0); ctx.stroke()
-  ctx.setLineDash([])
-  const gH=80, gTop=gY-gH/2
-  ctx.lineWidth=4; ctx.strokeRect(0,gTop,14,gH); ctx.strokeRect(W-14,gTop,14,gH); ctx.lineWidth=2
+    const gY=H/2
+    // Área de portero (6m) — línea sólida
+    ctx.beginPath(); ctx.arc(8,gY,150,-1.15,1.15); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,150,Math.PI-1.15,Math.PI+1.15); ctx.stroke()
+    // Línea de tiro libre (9m) — punteada
+    ctx.setLineDash([9,7])
+    ctx.beginPath(); ctx.arc(8,gY,210,-1.0,1.0); ctx.stroke()
+    ctx.beginPath(); ctx.arc(W-8,gY,210,Math.PI-1.0,Math.PI+1.0); ctx.stroke()
+    ctx.setLineDash([])
+    // Marcas de 7 metros (penal) — rayitas cortas
+    ctx.beginPath(); ctx.moveTo(8+150-2,gY-7); ctx.lineTo(8+150-2,gY+7); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(W-8-150+2,gY-7); ctx.lineTo(W-8-150+2,gY+7); ctx.stroke()
+    // Línea de gol + portería
+    const gH=70, gTop=gY-gH/2
+    ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
+    return
+  }
+
+  // Mitad de cancha: se dibuja UN SOLO arco, ocupando todo el ancho disponible
+  const gY = H/2
+  ctx.strokeRect(8,8,W-16,H-16)
+
+  if (mode === 'half-left') {
+    ctx.beginPath(); ctx.arc(8,gY,W-40,-0.62,0.62); ctx.stroke()
+    ctx.setLineDash([9,7])
+    ctx.beginPath(); ctx.arc(8,gY,W-12,-0.52,0.52); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.moveTo(8+(W-40)-2,gY-7); ctx.lineTo(8+(W-40)-2,gY+7); ctx.stroke()
+    const gH=70, gTop=gY-gH/2
+    ctx.lineWidth=5; ctx.strokeRect(0,gTop,12,gH); ctx.lineWidth=2.5
+  } else {
+    ctx.beginPath(); ctx.arc(W-8,gY,W-40,Math.PI-0.62,Math.PI+0.62); ctx.stroke()
+    ctx.setLineDash([9,7])
+    ctx.beginPath(); ctx.arc(W-8,gY,W-12,Math.PI-0.52,Math.PI+0.52); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.moveTo(W-8-(W-40)+2,gY-7); ctx.lineTo(W-8-(W-40)+2,gY+7); ctx.stroke()
+    const gH=70, gTop=gY-gH/2
+    ctx.lineWidth=5; ctx.strokeRect(W-12,gTop,12,gH); ctx.lineWidth=2.5
+  }
 }
 
-function arrowShape(ctx: CanvasRenderingContext2D, a: Arrow, alpha=1) {
+function arrowShape(ctx: CanvasRenderingContext2D, a: Arrow, alpha=1, sel=false) {
   ctx.save(); ctx.globalAlpha=alpha
+  if (sel) { ctx.shadowColor='white'; ctx.shadowBlur=12 }
   ctx.strokeStyle=a.color; ctx.fillStyle=a.color; ctx.lineWidth=2.8
   if (a.kind==='arrow-dash') ctx.setLineDash([9,6]); else ctx.setLineDash([])
   ctx.beginPath()
@@ -99,18 +140,19 @@ function elemShape(ctx: CanvasRenderingContext2D, el: Elem, sel: boolean) {
   if (sel) { ctx.shadowColor='white'; ctx.shadowBlur=14 }
   const {x,y}=el
   if (el.kind==='player-own'||el.kind==='player-rival'||el.kind==='goalkeeper') {
-    const c = el.kind==='player-own'?'#d32f2f': el.kind==='player-rival'?'#1565c0':'#f9a825'
+    const c = el.kind==='player-own' ? '#d32f2f' : el.kind==='player-rival' ? '#ffffff' : '#f9a825'
+    const textColor = el.kind==='player-rival' ? '#111111' : 'white'
     ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,19,0,Math.PI*2); ctx.fill()
-    ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke()
-    ctx.fillStyle='white'; ctx.font='bold 13px Arial'
+    ctx.strokeStyle= el.kind==='player-rival' ? '#111111' : 'white'; ctx.lineWidth=2; ctx.stroke()
+    ctx.fillStyle=textColor; ctx.font='bold 13px Arial'
     ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(el.n??''),x,y)
   } else if (el.kind==='cone') {
     ctx.fillStyle='#ff6600'
     ctx.beginPath(); ctx.moveTo(x,y-15); ctx.lineTo(x-11,y+10); ctx.lineTo(x+11,y+10)
-    ctx.closePath(); ctx.fill(); ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke()
+    ctx.closePath(); ctx.fill(); ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke()
   } else if (el.kind==='ball') {
     ctx.fillStyle='#f5f5f5'; ctx.beginPath(); ctx.arc(x,y,11,0,Math.PI*2); ctx.fill()
-    ctx.strokeStyle='#444'; ctx.lineWidth=1.5; ctx.stroke()
+    ctx.strokeStyle='#111'; ctx.lineWidth=1.5; ctx.stroke()
     ctx.strokeStyle='#999'; ctx.lineWidth=1
     ctx.beginPath(); ctx.moveTo(x-11,y); ctx.lineTo(x+11,y); ctx.moveTo(x,y-11); ctx.lineTo(x,y+11); ctx.stroke()
   } else if (el.kind==='mannequin') {
@@ -123,21 +165,36 @@ function elemShape(ctx: CanvasRenderingContext2D, el: Elem, sel: boolean) {
   ctx.shadowBlur=0
 }
 
+function textShape(ctx: CanvasRenderingContext2D, t: TextElem, sel: boolean) {
+  ctx.save()
+  if (sel) { ctx.shadowColor='white'; ctx.shadowBlur=10 }
+  ctx.font='bold 16px Arial'
+  ctx.textAlign='center'; ctx.textBaseline='middle'
+  // Fondo semi-transparente para que se lea sobre cualquier color de cancha
+  const w = ctx.measureText(t.text).width
+  ctx.fillStyle='rgba(0,0,0,0.55)'
+  ctx.fillRect(t.x - w/2 - 6, t.y - 12, w + 12, 24)
+  ctx.fillStyle=t.color
+  ctx.fillText(t.text, t.x, t.y)
+  ctx.restore()
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function TacticalBoard({ onSave, onClose }: {
   onSave:(url:string)=>void; onClose:()=>void
 }) {
   const cvRef    = useRef<HTMLCanvasElement>(null)
-  const scene    = useRef<Scene>({ elems:[], arrows:[] })
-  const hist     = useRef<Scene[]>([{ elems:[], arrows:[] }])
+  const scene    = useRef<Scene>({ elems:[], arrows:[], texts:[] })
+  const hist     = useRef<Scene[]>([{ elems:[], arrows:[], texts:[] }])
   const histIdx  = useRef(0)
   const counts   = useRef({ own:1, rival:1, gk:1 })
   const selId    = useRef<string|null>(null)
+  const selArrowId = useRef<string|null>(null)
   const editMode = useRef(false)   // mostrar handles de flechas
 
   // drag state
   const drag = useRef<{
-    what: 'none'|'elem'|'arrow-body'|'arrow-p1'|'arrow-p2'|'arrow-ctrl'|'drawing'
+    what: 'none'|'elem'|'text'|'arrow-body'|'arrow-p1'|'arrow-p2'|'arrow-ctrl'|'drawing'
     id: string
     ox: number; oy: number   // offset o punto de inicio
   }>({ what:'none', id:'', ox:0, oy:0 })
@@ -164,7 +221,7 @@ export function TacticalBoard({ onSave, onClose }: {
     const sc = s ?? scene.current
     ctx.clearRect(0,0,W,H)
     court(ctx, courtRef.current)
-    sc.arrows.forEach(a => arrowShape(ctx,a))
+    sc.arrows.forEach(a => arrowShape(ctx, a, 1, a.id===selArrowId.current))
     if (editMode.current) {
       sc.arrows.forEach(a => {
         handle(ctx, a.x1, a.y1, '#fff', a.color)
@@ -173,9 +230,39 @@ export function TacticalBoard({ onSave, onClose }: {
       })
     }
     sc.elems.forEach(el => elemShape(ctx, el, el.id===selId.current))
+    sc.texts.forEach(t => textShape(ctx, t, t.id===selId.current))
   }
 
   useEffect(() => { paint() }, [])
+
+  // Borrar con Supr/Delete el elemento, texto o flecha seleccionado actualmente
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (!selId.current && !selArrowId.current) return
+      // Evitar borrar mientras se escribe en un input/textarea de otra parte de la pantalla
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
+      e.preventDefault()
+      const s = scene.current
+      if (selArrowId.current) {
+        const id = selArrowId.current
+        commit({ ...s, arrows: s.arrows.filter(a => a.id !== id) })
+        selArrowId.current = null
+      } else if (selId.current) {
+        const id = selId.current
+        commit({
+          elems: s.elems.filter(el => el.id !== id),
+          texts: s.texts.filter(t => t.id !== id),
+          arrows: s.arrows,
+        })
+        selId.current = null
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // ─── Canvas coords ─────────────────────────────────────────────────────────
   function pos(e: React.MouseEvent<HTMLCanvasElement>): Pt {
@@ -186,6 +273,9 @@ export function TacticalBoard({ onSave, onClose }: {
   // ─── Hit tests ─────────────────────────────────────────────────────────────
   function hitElem(p:Pt): Elem|null {
     return [...scene.current.elems].reverse().find(e=>Math.hypot(e.x-p.x,e.y-p.y)<HIT+8)??null
+  }
+  function hitText(p:Pt): TextElem|null {
+    return [...scene.current.texts].reverse().find(t=>Math.hypot(t.x-p.x,t.y-p.y)<HIT+14)??null
   }
   function hitArrowP1(p:Pt): Arrow|null {
     if (!editMode.current) return null
@@ -208,9 +298,9 @@ export function TacticalBoard({ onSave, onClose }: {
 
   // ─── Commit ────────────────────────────────────────────────────────────────
   function commit(ns: Scene) {
-    scene.current = { elems:[...ns.elems], arrows:[...ns.arrows] }
+    scene.current = { elems:[...ns.elems], arrows:[...ns.arrows], texts:[...ns.texts] }
     const h = hist.current.slice(0, histIdx.current+1)
-    h.push({ elems:[...ns.elems], arrows:[...ns.arrows] })
+    h.push({ elems:[...ns.elems], arrows:[...ns.arrows], texts:[...ns.texts] })
     hist.current = h
     histIdx.current = h.length-1
     paint(ns)
@@ -228,6 +318,8 @@ export function TacticalBoard({ onSave, onClose }: {
     if (t==='eraser') {
       const el = hitElem(p)
       if (el) { commit({...scene.current, elems:scene.current.elems.filter(x=>x.id!==el.id)}); return }
+      const tx = hitText(p)
+      if (tx) { commit({...scene.current, texts:scene.current.texts.filter(x=>x.id!==tx.id)}); return }
       const ab = hitArrowBody(p)
       if (ab) { commit({...scene.current, arrows:scene.current.arrows.filter(a=>a.id!==ab.id)}); return }
       return
@@ -243,10 +335,21 @@ export function TacticalBoard({ onSave, onClose }: {
       const p1 = hitArrowP1(p)
       if (p1) { d.what='arrow-p1';  d.id=p1.id; d.ox=p.x; d.oy=p.y; return }
       const el = hitElem(p)
-      if (el) { selId.current=el.id; d.what='elem'; d.id=el.id; d.ox=p.x-el.x; d.oy=p.y-el.y; paint(); return }
+      if (el) { selId.current=el.id; selArrowId.current=null; d.what='elem'; d.id=el.id; d.ox=p.x-el.x; d.oy=p.y-el.y; paint(); return }
+      const tx = hitText(p)
+      if (tx) { selId.current=tx.id; selArrowId.current=null; d.what='text'; d.id=tx.id; d.ox=p.x-tx.x; d.oy=p.y-tx.y; paint(); return }
       const ab = hitArrowBody(p)
-      if (ab) { d.what='arrow-body'; d.id=ab.id; d.ox=p.x; d.oy=p.y; return }
-      selId.current=null; paint(); return
+      if (ab) { selId.current=null; selArrowId.current=ab.id; d.what='arrow-body'; d.id=ab.id; d.ox=p.x; d.oy=p.y; paint(); return }
+      selId.current=null; selArrowId.current=null; paint(); return
+    }
+
+    // PLACE TEXT
+    if (t==='text') {
+      const txt = window.prompt('Texto a agregar:', '')
+      if (txt && txt.trim()) {
+        commit({ ...scene.current, texts:[...scene.current.texts, { id:uid(), kind:'text', x:p.x, y:p.y, text:txt.trim(), color:colorRef.current }] })
+      }
+      return
     }
 
     // DRAWING ARROWS
@@ -272,6 +375,11 @@ export function TacticalBoard({ onSave, onClose }: {
 
     if (d.what==='elem') {
       const ns = { ...s, elems: s.elems.map(el=>el.id===d.id?{...el,x:p.x-d.ox,y:p.y-d.oy}:el) }
+      scene.current=ns; paint(ns); return
+    }
+
+    if (d.what==='text') {
+      const ns = { ...s, texts: s.texts.map(t=>t.id===d.id?{...t,x:p.x-d.ox,y:p.y-d.oy}:t) }
       scene.current=ns; paint(ns); return
     }
 
@@ -303,6 +411,7 @@ export function TacticalBoard({ onSave, onClose }: {
         if(a.kind==='arrow-curve') handle(ctx,a.cx,a.cy,'#ffff00','#fff')
       })
       s.elems.forEach(el=>elemShape(ctx,el,false))
+      s.texts.forEach(t=>textShape(ctx,t,false))
       const t=toolRef.current
       const prev: Arrow = {
         id:'prev', kind:t as Arrow['kind'],
@@ -320,7 +429,7 @@ export function TacticalBoard({ onSave, onClose }: {
     const p = pos(e)
     const d = drag.current
 
-    if (['elem','arrow-p1','arrow-p2','arrow-ctrl'].includes(d.what)) {
+    if (['elem','text','arrow-p1','arrow-p2','arrow-ctrl'].includes(d.what)) {
       d.what='none'; commit(scene.current); return
     }
     if (d.what==='arrow-body') {
@@ -353,10 +462,11 @@ export function TacticalBoard({ onSave, onClose }: {
     }
   }
   function clear() {
-    scene.current={elems:[],arrows:[]}
-    hist.current=[{elems:[],arrows:[]}]
+    scene.current={elems:[],arrows:[],texts:[]}
+    hist.current=[{elems:[],arrows:[],texts:[]}]
     histIdx.current=0
     selId.current=null
+    selArrowId.current=null
     counts.current={own:1,rival:1,gk:1}
     paint(); rerender()
   }
@@ -366,11 +476,12 @@ export function TacticalBoard({ onSave, onClose }: {
   const TOOLS: {id:Tool; label:string; el:React.ReactNode}[] = [
     {id:'select',       label:'Mover / Editar',   el:<MousePointer size={14}/>},
     {id:'player-own',   label:'Jugador propio',   el:<span className="w-4 h-4 rounded-full bg-red-600 border border-white inline-block"/>},
-    {id:'player-rival', label:'Jugador rival',    el:<span className="w-4 h-4 rounded-full bg-blue-600 border border-white inline-block"/>},
+    {id:'player-rival', label:'Jugador rival',    el:<span className="w-4 h-4 rounded-full bg-white border-2 border-black inline-block"/>},
     {id:'goalkeeper',   label:'Portero',          el:<span className="w-4 h-4 rounded-full bg-yellow-400 border border-white inline-block"/>},
     {id:'mannequin',    label:'Muñeco',           el:<span className="text-base">🚶</span>},
     {id:'cone',         label:'Cono',             el:<span className="text-orange-500 font-bold">▲</span>},
     {id:'ball',         label:'Pelota',           el:<span className="text-gray-200 font-bold">●</span>},
+    {id:'text',         label:'Texto',            el:<span className="text-white font-bold text-sm">T</span>},
     {id:'arrow-solid',  label:'Trayectoria ——▶', el:<span className="text-yellow-400 text-xs font-bold">——▶</span>},
     {id:'arrow-dash',   label:'Pase / Lanz. - -▶',el:<span className="text-yellow-400 text-xs font-bold">- -▶</span>},
     {id:'arrow-curve',  label:'Curva libre ∿▶',  el:<span className="text-yellow-400 text-xs font-bold">∿▶</span>},
@@ -458,7 +569,7 @@ export function TacticalBoard({ onSave, onClose }: {
         </div>
 
         <div className="px-4 py-2 border-t border-white/10 text-xs text-white/25 text-center">
-          Seleccionar → mover elementos y flechas · "Editar flechas" → arrastrar puntos de inicio, fin y curva
+          Seleccionar → mover, o apretar Supr/Delete para borrar · "Editar flechas" → arrastrar puntos de inicio, fin y curva
         </div>
       </div>
     </div>
