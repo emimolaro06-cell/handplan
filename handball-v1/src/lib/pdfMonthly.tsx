@@ -2,9 +2,9 @@ import { Document, Page, View, Text, Image, StyleSheet, pdf } from '@react-pdf/r
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CLUB_NAME } from '@/lib/constants'
-import type { ContentCategory } from '@/types'
+import type { ContentCategory, Account } from '@/types'
 
-const GREEN  = '#1a6b1a'
+const GREEN_DEFAULT = '#1a6b1a'
 const YELLOW = '#f5c842'
 const DARK   = '#1a1a1a'
 const WHITE  = '#ffffff'
@@ -25,54 +25,62 @@ const CONTENT_BG: Record<ContentCategory, string> = {
   'MIXTO': '#4b5563',
 }
 
-const s = StyleSheet.create({
-  page: { backgroundColor: '#f5f5f5', padding: 0, fontFamily: 'Helvetica' },
-  header: {
-    backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottom: `3px solid ${YELLOW}`,
-  },
-  headerLeft: { flex: 1 },
-  clubName: { color: WHITE, fontSize: 12, fontFamily: 'Helvetica-Bold' },
-  monthTitle: { color: YELLOW, fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 2 },
-  headerRight: { width: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: YELLOW, borderRadius: 8, padding: 4 },
-  logo: { width: 62, height: 62 },
+function buildStyles(green: string) {
+  return StyleSheet.create({
+    page: { backgroundColor: '#f5f5f5', padding: 0, fontFamily: 'Helvetica' },
+    header: {
+      backgroundColor: green,
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 10,
+      borderBottom: `3px solid ${YELLOW}`,
+    },
+    headerLeft: { flex: 1 },
+    clubName: { color: WHITE, fontSize: 12, fontFamily: 'Helvetica-Bold' },
+    monthTitle: { color: YELLOW, fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 2 },
+    headerRight: { width: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: YELLOW, borderRadius: 8, padding: 4 },
+    logo: { width: 62, height: 62 },
 
-  body: { flexDirection: 'row', flex: 1, padding: 8, gap: 8 },
+    body: { flexDirection: 'row', flex: 1, padding: 8, gap: 8 },
 
-  sidebar: { width: 110 },
-  sidebarCard: { backgroundColor: WHITE, borderRadius: 6, padding: 8, marginBottom: 6, border: `1px solid #ddd` },
-  sidebarTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: GREEN, textTransform: 'uppercase', marginBottom: 4 },
-  sidebarText: { fontSize: 7, color: DARK, lineHeight: 1.4 },
+    sidebar: { width: 110 },
+    sidebarCard: { backgroundColor: WHITE, borderRadius: 6, padding: 8, marginBottom: 6, border: `1px solid #ddd` },
+    sidebarTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: green, textTransform: 'uppercase', marginBottom: 4 },
+    sidebarText: { fontSize: 7, color: DARK, lineHeight: 1.4 },
 
-  calendar: { flex: 1 },
-  dayHeaders: { flexDirection: 'row', marginBottom: 3 },
-  dayHeader: { flex: 1, textAlign: 'center', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase' },
-  dayHeaderWeekend: { flex: 1, textAlign: 'center', fontSize: 7, fontFamily: 'Helvetica-Bold', color: GREEN, textTransform: 'uppercase' },
+    calendar: { flex: 1 },
+    dayHeaders: { flexDirection: 'row', marginBottom: 3 },
+    dayHeader: { flex: 1, textAlign: 'center', fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase' },
+    dayHeaderWeekend: { flex: 1, textAlign: 'center', fontSize: 7, fontFamily: 'Helvetica-Bold', color: green, textTransform: 'uppercase' },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
-  dayCell: { width: '13.8%', minHeight: 55, backgroundColor: WHITE, borderRadius: 4, border: `1px solid #ddd`, padding: 3 },
-  dayCellWeekend: { width: '13.8%', minHeight: 55, backgroundColor: '#f0faf0', borderRadius: 4, border: `1px solid #c8e6c9`, padding: 3 },
-  dayCellOtherMonth: { width: '13.8%', minHeight: 55, backgroundColor: '#f9f9f9', borderRadius: 4, border: `1px solid #eee`, padding: 3, opacity: 0.4 },
-  dayNum: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: DARK, marginBottom: 2 },
-  dayNumWeekend: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: GREEN, marginBottom: 2 },
-  chip: { borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1, marginBottom: 1.5 },
-  chipText: { fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: WHITE },
-  noteChip: { backgroundColor: '#fef3c7', borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1, marginBottom: 1.5 },
-  noteText: { fontSize: 5.5, color: '#92400e' },
-})
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
+    dayCell: { width: '13.8%', minHeight: 55, backgroundColor: WHITE, borderRadius: 4, border: `1px solid #ddd`, padding: 3 },
+    dayCellWeekend: { width: '13.8%', minHeight: 55, backgroundColor: '#f0faf0', borderRadius: 4, border: `1px solid #c8e6c9`, padding: 3 },
+    dayCellOtherMonth: { width: '13.8%', minHeight: 55, backgroundColor: '#f9f9f9', borderRadius: 4, border: `1px solid #eee`, padding: 3, opacity: 0.4 },
+    dayNum: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: DARK, marginBottom: 2 },
+    dayNumWeekend: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: green, marginBottom: 2 },
+    chip: { borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1, marginBottom: 1.5 },
+    chipText: { fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: WHITE },
+    noteChip: { backgroundColor: '#fef3c7', borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1, marginBottom: 1.5 },
+    noteText: { fontSize: 5.5, color: '#92400e' },
+  })
+}
 
 const DAYS_ES = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB']
 
-export function MonthlyDocument({ plan, date }: { plan: Record<string, unknown>; date: Date }) {
+export function MonthlyDocument({ plan, date, account }: {
+  plan: Record<string, unknown>; date: Date; account?: Account | null
+}) {
   const monthStart = startOfMonth(date)
   const monthEnd   = endOfMonth(date)
   const calStart   = startOfWeek(monthStart, { weekStartsOn: 0 })
   const calEnd     = endOfWeek(monthEnd,   { weekStartsOn: 0 })
   const calDays    = eachDayOfInterval({ start: calStart, end: calEnd })
-  const logoUrl    = `${window.location.origin}/logo-dj.png`
+
+  const accountName = account?.name || CLUB_NAME
+  const logoUrl = account?.logo_url || `${window.location.origin}/logo-dj.png`
+  const green = account?.primary_color || GREEN_DEFAULT
+  const s = buildStyles(green)
 
   const days = (plan.days ?? {}) as Record<string, { contents: ContentCategory[]; note: string }>
 
@@ -82,7 +90,7 @@ export function MonthlyDocument({ plan, date }: { plan: Record<string, unknown>;
         {/* Header */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <Text style={s.clubName}>{CLUB_NAME}</Text>
+            <Text style={s.clubName}>{accountName}</Text>
             <Text style={s.monthTitle}>
               {format(date, "MMMM yyyy", { locale: es }).toUpperCase()} — {plan.team_category as string}
             </Text>
@@ -165,8 +173,8 @@ export function MonthlyDocument({ plan, date }: { plan: Record<string, unknown>;
   )
 }
 
-export async function downloadMonthlyPDF(plan: Record<string, unknown>, date: Date) {
-  const blob = await pdf(<MonthlyDocument plan={plan} date={date}/>).toBlob()
+export async function downloadMonthlyPDF(plan: Record<string, unknown>, date: Date, account?: Account | null) {
+  const blob = await pdf(<MonthlyDocument plan={plan} date={date} account={account}/>).toBlob()
   const url  = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href     = url
