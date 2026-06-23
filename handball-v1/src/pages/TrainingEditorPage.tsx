@@ -40,7 +40,7 @@ export function TrainingEditorPage() {
   const navigate = useNavigate()
   const { id }   = useParams<{ id?: string }>()
   const isEdit   = Boolean(id)
-  const { profile, effectiveUserId, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory, account } = useAppStore()
 
   const [moments, setMoments]               = useState<Moment[]>([blankMoment()])
   const [exerciseLabels, setExerciseLabels] = useState<ExerciseLabel[]>([])
@@ -159,7 +159,7 @@ export function TrainingEditorPage() {
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       moments: moments.map((m, i) => ({ ...m, order_index: i, session_id: sessionId ?? '' })),
     }
-    await downloadTrainingPDF(session)
+    await downloadTrainingPDF(session, account)
   }
 
   function onPreview(formData: SessionFormData) {
@@ -340,7 +340,7 @@ export function TrainingEditorPage() {
         <PDFPreview
           session={previewSession}
           onClose={() => setShowPreview(false)}
-          onDownload={() => { downloadTrainingPDF(previewSession); setShowPreview(false) }}
+          onDownload={() => { downloadTrainingPDF(previewSession, account); setShowPreview(false) }}
         />
       )}
 

@@ -49,7 +49,7 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 export function MonthlyPlanPage() {
-  const { profile, effectiveUserId, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory, account } = useAppStore()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [plan, setPlan] = useState<MonthPlan | null>(null)
@@ -140,7 +140,7 @@ export function MonthlyPlanPage() {
     if (!plan) return
     setExporting(true)
     try {
-      await downloadMonthlyPDF(plan, currentDate)
+      await downloadMonthlyPDF(plan, currentDate, account)
     } finally {
       setExporting(false)
     }

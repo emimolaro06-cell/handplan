@@ -17,7 +17,7 @@ import type { TrainingSession, LibraryFilters, TeamCategory } from '@/types'
 
 export function LibraryPage() {
   const navigate = useNavigate()
-  const { profile, effectiveUserId } = useAppStore()
+  const { profile, effectiveUserId, account } = useAppStore()
 
   const [sessions, setSessions]   = useState<TrainingSession[]>([])
   const [coaches,  setCoaches]    = useState<string[]>([])
@@ -237,7 +237,7 @@ export function LibraryPage() {
                   <Button variant="ghost" size="xs" icon={<Eye size={13}/>} onClick={() => setPreview(s)}>Ver</Button>
                   <Button variant="ghost" size="xs" icon={<Edit size={13}/>} onClick={() => navigate(`/entrenamiento/${s.id}`)}>Editar</Button>
                   <Button variant="ghost" size="xs" icon={<Copy size={13}/>} onClick={() => handleDuplicate(s)}>Duplicar</Button>
-                  <Button variant="ghost" size="xs" icon={<FileDown size={13}/>} onClick={() => downloadTrainingPDF(s)}>PDF</Button>
+                  <Button variant="ghost" size="xs" icon={<FileDown size={13}/>} onClick={() => downloadTrainingPDF(s, account)}>PDF</Button>
                   <Button
                     variant="ghost" size="xs" icon={<Trash2 size={13}/>}
                     className="ml-auto text-red-400 hover:text-red-600 hover:bg-red-50"
@@ -305,7 +305,7 @@ export function LibraryPage() {
               <Button size="sm" icon={<Edit size={14}/>} onClick={() => { setPreview(null); navigate(`/entrenamiento/${preview.id}`) }}>
                 Editar
               </Button>
-              <Button variant="gold" size="sm" icon={<FileDown size={14}/>} onClick={() => downloadTrainingPDF(preview)}>
+              <Button variant="gold" size="sm" icon={<FileDown size={14}/>} onClick={() => downloadTrainingPDF(preview, account)}>
                 Exportar PDF
               </Button>
             </div>

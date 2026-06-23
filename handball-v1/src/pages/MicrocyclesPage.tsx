@@ -515,7 +515,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   const [showShare, setShowShare] = useState(false)
   const [subcontents, setSubcontents] = useState<Subcontent[]>([])
 
-  const { profile, effectiveUserId } = useAppStore()
+  const { profile, effectiveUserId, account } = useAppStore()
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -654,6 +654,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
         weekStart,
         days: orderedDays,
         subcontents,
+        account,
       })
     } finally {
       setExporting(false)
