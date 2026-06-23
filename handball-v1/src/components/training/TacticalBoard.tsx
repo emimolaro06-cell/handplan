@@ -8,7 +8,7 @@ type Tool =
   | 'cone' | 'ball' | 'mannequin' | 'text'
   | 'arrow-solid' | 'arrow-dash' | 'arrow-curve' | 'line' | 'eraser'
 
-type CourtMode = 'full' | 'half-left' | 'half-right'
+type CourtMode = 'full' | 'half'
 
 interface Pt { x: number; y: number }
 
@@ -93,12 +93,9 @@ function court(ctx: CanvasRenderingContext2D, mode: CourtMode, w: number, h: num
   }
 
   // Mitad de cancha VERTICAL: el arco queda arriba (y=8), la cancha se extiende hacia abajo.
-  // Mismo arco para half-left y half-right — la diferencia entre ambos modos no aplica visualmente
-  // en este formato (es la misma media cancha vista de frente), pero se mantiene el selector por
-  // si más adelante se quiere espejar contenido específico de cada lado.
   const gX = w/2
-  const r6v = w * 0.46   // radio área de portero (6m), proporcional al ancho del canvas vertical
-  const r9v = w * 0.62   // radio línea de tiro libre (9m)
+  const r6v = w * 0.36   // radio área de portero (6m), proporcional al ancho del canvas vertical
+  const r9v = w * 0.48   // radio línea de tiro libre (9m)
   const halfCourtW = gX - 8   // distancia horizontal del centro a cada borde lateral
   const ang6v = Math.asin(Math.min(1, halfCourtW / r6v))
   const ang9v = Math.asin(Math.min(1, halfCourtW / r9v))
@@ -519,11 +516,11 @@ export function TacticalBoard({ onSave, onClose }: {
           <h2 className="text-white font-bold text-sm">🏐 Pizarra táctica</h2>
           <div className="flex gap-2 items-center flex-wrap">
             <div className="flex gap-1 bg-white/10 rounded-xl p-1">
-              {(['full','half-left','half-right'] as CourtMode[]).map((m,i) => (
+              {(['full','half'] as CourtMode[]).map((m,i) => (
                 <button type="button" key={m} onClick={()=>setM(m)}
                   className={clsx('text-xs px-2.5 py-1.5 rounded-lg transition-colors',
                     court2===m?'bg-dj-600 text-white font-semibold':'text-white/60 hover:text-white')}>
-                  {['Completa','Mitad izq.','Mitad der.'][i]}
+                  {['Completa','Mitad'][i]}
                 </button>
               ))}
             </div>
