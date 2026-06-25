@@ -22,7 +22,7 @@ import { CreateAccountComingSoonPage } from '@/pages/CreateAccountComingSoonPage
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-dj-900">
+    <div className="min-h-screen flex items-center justify-center bg-neutral2-900">
       <div className="flex flex-col items-center gap-3">
         <Spinner size={36}/>
         <p className="text-white/50 text-sm">Cargando...</p>
@@ -36,7 +36,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 function CategoryGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
   const selectedCategory = useAppStore(s => s.selectedCategory)
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-dj-900"><Spinner size={36}/></div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-neutral2-900"><Spinner size={36}/></div>
   if (!profile) return <Navigate to="/" replace/>
   if (!selectedCategory) return <Navigate to="/categoria" replace/>
   return <>{children}</>
