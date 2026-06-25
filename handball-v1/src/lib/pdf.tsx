@@ -12,27 +12,32 @@ const DARK   = '#1a1a1a'
 const WHITE  = '#ffffff'
 const LIGHT  = '#f0f0f0'
 
-function buildStyles(green: string) {
+// Gris preestablecido para cuentas sin marca propia (todo lo que en DyJ es amarillo/verde-imagen fijo)
+const GRAY_SECONDARY = '#9ca3af'
+const GRAY_PLACEHOLDER = '#4b5563'
+const GRAY_PLACEHOLDER_TEXT = '#9ca3af'
+
+function buildStyles(green: string, secondary: string, placeholderBg: string, placeholderText: string) {
   return StyleSheet.create({
     page: { backgroundColor: '#2d2d2d', padding: 0, fontFamily: 'Helvetica' },
     header: {
       backgroundColor: green, flexDirection: 'row',
-      alignItems: 'stretch', borderBottom: `4px solid ${YELLOW}`, minHeight: 90,
+      alignItems: 'stretch', borderBottom: `4px solid ${secondary}`, minHeight: 90,
     },
-    headerLeft:   { flex: 1.4, padding: 12, borderRight: `2px solid ${YELLOW}`, justifyContent: 'center' },
+    headerLeft:   { flex: 1.4, padding: 12, borderRight: `2px solid ${secondary}`, justifyContent: 'center' },
     headerCenter: { flex: 2,   padding: 12, justifyContent: 'center', gap: 5 },
-    headerRight:  { width: 95, padding: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: YELLOW },
+    headerRight:  { width: 95, padding: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: WHITE },
 
     clubName:     { color: WHITE,  fontSize: 16, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5 },
-    sessionLabel: { color: YELLOW, fontSize: 20, fontFamily: 'Helvetica-Bold', marginTop: 4, textDecoration: 'underline' },
+    sessionLabel: { color: secondary, fontSize: 20, fontFamily: 'Helvetica-Bold', marginTop: 4, textDecoration: 'underline' },
     tagRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 },
-    tag:          { backgroundColor: YELLOW, color: DARK, fontSize: 10, fontFamily: 'Helvetica-Bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+    tag:          { backgroundColor: secondary, color: DARK, fontSize: 10, fontFamily: 'Helvetica-Bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
 
     dateRow:    { flexDirection: 'row', gap: 8, marginBottom: 4 },
-    dateLabel:  { color: YELLOW, fontSize: 13, fontFamily: 'Helvetica-Bold' },
+    dateLabel:  { color: secondary, fontSize: 13, fontFamily: 'Helvetica-Bold' },
     dateValue:  { color: WHITE,  fontSize: 13, fontFamily: 'Helvetica-Bold' },
     contentRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    contentLabel: { color: YELLOW, fontSize: 12, fontFamily: 'Helvetica-Bold' },
+    contentLabel: { color: secondary, fontSize: 12, fontFamily: 'Helvetica-Bold' },
     contentBox:   { backgroundColor: WHITE, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, flex: 1 },
     contentText:  { color: DARK, fontSize: 11, fontFamily: 'Helvetica-Bold' },
     objectiveText: { color: WHITE, fontSize: 10, marginTop: 3 },
@@ -44,12 +49,12 @@ function buildStyles(green: string) {
 
     momentHeader: { backgroundColor: DARK, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 6, gap: 6 },
     momentHeaderText:  { color: WHITE, fontSize: 10, fontFamily: 'Helvetica-Bold', flex: 1 },
-    momentHeaderBadge: { backgroundColor: YELLOW, color: DARK, fontSize: 8, fontFamily: 'Helvetica-Bold', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
+    momentHeaderBadge: { backgroundColor: secondary, color: DARK, fontSize: 8, fontFamily: 'Helvetica-Bold', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
 
     momentBody: { flexDirection: 'row', minHeight: 115, maxHeight: 140 },
-    momentImage: { width: 135, height: 130, objectFit: 'contain', backgroundColor: '#1a4a1a' },
-    momentImagePlaceholder: { width: 135, height: 130, backgroundColor: '#1a4a1a', alignItems: 'center', justifyContent: 'center' },
-    momentImagePlaceholderText: { color: '#4a8a4a', fontSize: 9, textAlign: 'center' },
+    momentImage: { width: 135, height: 130, objectFit: 'contain', backgroundColor: placeholderBg },
+    momentImagePlaceholder: { width: 135, height: 130, backgroundColor: placeholderBg, alignItems: 'center', justifyContent: 'center' },
+    momentImagePlaceholderText: { color: placeholderText, fontSize: 9, textAlign: 'center' },
 
     momentContent:   { flex: 1, padding: 7 },
     momentLabel:     { color: green, fontSize: 9,  fontFamily: 'Helvetica-Bold', marginBottom: 3 },
@@ -105,7 +110,12 @@ function TrainingDocument({ session, account }: { session: TrainingSession; acco
   const accountName = account?.name || CLUB_NAME
   const logoUrl = account?.logo_url || `${window.location.origin}/logo-handplan.png`
   const green = account?.primary_color || GREEN_DEFAULT
-  const s = buildStyles(green)
+  // El amarillo dorado es la identidad visual histórica de DyJ — el resto de las cuentas usa gris preestablecido
+  const isDyJ = !account || account.primary_color === GREEN_DEFAULT
+  const secondary = isDyJ ? YELLOW : GRAY_SECONDARY
+  const placeholderBg = isDyJ ? '#1a4a1a' : GRAY_PLACEHOLDER
+  const placeholderText = isDyJ ? '#4a8a4a' : GRAY_PLACEHOLDER_TEXT
+  const s = buildStyles(green, secondary, placeholderBg, placeholderText)
 
   return (
     <Document title={`Entrenamiento ${session.team_category} - Sesión ${session.session_number}`}>

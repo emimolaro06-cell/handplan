@@ -9,6 +9,9 @@ const YELLOW = '#f5c842'
 const DARK   = '#1a1a1a'
 const WHITE  = '#ffffff'
 
+// Gris preestablecido para cuentas sin marca propia
+const GRAY_SECONDARY = '#9ca3af'
+
 const CONTENT_SHORT: Record<ContentCategory, string> = {
   'Técnica individual OFENSIVA':  'TÉC IND OF',
   'Técnica individual DEFENSIVA': 'TÉC IND DEF',
@@ -25,7 +28,7 @@ const CONTENT_BG: Record<ContentCategory, string> = {
   'MIXTO': '#4b5563',
 }
 
-function buildStyles(green: string) {
+function buildStyles(green: string, secondary: string) {
   return StyleSheet.create({
     page: { backgroundColor: '#f5f5f5', padding: 0, fontFamily: 'Helvetica' },
     header: {
@@ -33,12 +36,12 @@ function buildStyles(green: string) {
       flexDirection: 'row',
       alignItems: 'center',
       padding: 10,
-      borderBottom: `3px solid ${YELLOW}`,
+      borderBottom: `3px solid ${secondary}`,
     },
     headerLeft: { flex: 1 },
     clubName: { color: WHITE, fontSize: 12, fontFamily: 'Helvetica-Bold' },
-    monthTitle: { color: YELLOW, fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 2 },
-    headerRight: { width: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: YELLOW, borderRadius: 8, padding: 4 },
+    monthTitle: { color: secondary, fontSize: 16, fontFamily: 'Helvetica-Bold', marginTop: 2 },
+    headerRight: { width: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: WHITE, borderRadius: 8, padding: 4 },
     logo: { width: 62, height: 62 },
 
     body: { flexDirection: 'row', flex: 1, padding: 8, gap: 8 },
@@ -80,7 +83,9 @@ export function MonthlyDocument({ plan, date, account }: {
   const accountName = account?.name || CLUB_NAME
   const logoUrl = account?.logo_url || `${window.location.origin}/logo-handplan.png`
   const green = account?.primary_color || GREEN_DEFAULT
-  const s = buildStyles(green)
+  const isDyJ = !account || account.primary_color === GREEN_DEFAULT
+  const secondary = isDyJ ? YELLOW : GRAY_SECONDARY
+  const s = buildStyles(green, secondary)
 
   const days = (plan.days ?? {}) as Record<string, { contents: ContentCategory[]; note: string }>
 
