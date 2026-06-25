@@ -17,10 +17,12 @@ export async function listPlayers(userId: string, teamCategory: TeamCategory): P
   return (data ?? []) as Player[]
 }
 
-export async function addPlayer(userId: string, teamCategory: TeamCategory, fullName: string): Promise<Player> {
+export async function addPlayer(
+  userId: string, teamCategory: TeamCategory, fullName: string, accountId?: string | null,
+): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
-    .insert({ user_id: userId, team_category: teamCategory, full_name: fullName.trim() })
+    .insert({ user_id: userId, team_category: teamCategory, full_name: fullName.trim(), account_id: accountId })
     .select()
     .single()
   if (error) throw error

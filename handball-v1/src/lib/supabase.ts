@@ -109,11 +109,12 @@ export async function getSessionById(id: string) {
 export async function createSession(
   userId: string,
   data: Record<string, unknown>,
-  moments: Record<string, unknown>[]
+  moments: Record<string, unknown>[],
+  accountId?: string | null,
 ) {
   const { data: session, error } = await supabase
     .from('training_sessions')
-    .insert({ ...data, user_id: userId, status: 'saved' })
+    .insert({ ...data, user_id: userId, status: 'saved', account_id: accountId })
     .select()
     .single()
 
@@ -158,12 +159,12 @@ export async function updateSession(
   return { data: session, error: null }
 }
 
-export async function duplicateSession(id: string, userId: string) {
+export async function duplicateSession(id: string, userId: string, accountId?: string | null) {
   // Traer original con momentos
   const { data: orig, error } = await getSessionById(id)
   if (error || !orig) return { data: null, error }
 
-  const { moments, id: _id, created_at, updated_at, ...rest } = orig as Record<string, unknown>
+  const { moments, id: _id, created_at, updated_at, account_id: _accId, ...rest } = orig as Record<string, unknown>
 
   const copy = {
     ...rest,
@@ -177,7 +178,7 @@ export async function duplicateSession(id: string, userId: string) {
     ({ id: _mid, session_id: _sid, ...m }: Record<string, unknown>) => m
   )
 
-  return createSession(userId, copy, momentsCopy)
+  return createSession(userId, copy, momentsCopy, accountId)
 }
 
 export async function deleteSession(id: string) {
