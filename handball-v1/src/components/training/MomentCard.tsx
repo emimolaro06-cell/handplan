@@ -25,6 +25,7 @@ interface Props {
   onMoveUp: () => void
   onMoveDown: () => void
   userId: string
+  accountId: string | null
 }
 
 const CONTENT_SHORT: Record<ContentCategory, string> = {
@@ -37,7 +38,7 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
 
 export function MomentCard({
   moment, index, total, exerciseLabels, onLabelsChange,
-  onChange, onRemove, onMoveUp, onMoveDown, userId,
+  onChange, onRemove, onMoveUp, onMoveDown, userId, accountId,
 }: Props) {
   const [collapsed, setCollapsed]         = useState(false)
   const [uploading, setUploading]         = useState(false)
@@ -124,8 +125,8 @@ export function MomentCard({
   }
 
   async function handleAddLabel() {
-    if (!newLabel.trim()) return
-    const { data, error } = await addExerciseLabel(newLabel.trim(), userId)
+    if (!newLabel.trim() || !accountId) return
+    const { data, error } = await addExerciseLabel(newLabel.trim(), userId, accountId)
     if (error || !data) { setToast({ msg: 'Error al agregar.', type: 'error' }); return }
     onLabelsChange([...exerciseLabels, data as ExerciseLabel])
     setNewLabel('')
