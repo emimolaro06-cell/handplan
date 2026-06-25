@@ -18,7 +18,7 @@ import type { Player, AttendanceRecord, TeamCategory } from '@/types'
 type Tab = 'marcar' | 'resumen'
 
 export function AttendancePage() {
-  const { profile, effectiveUserId, selectedCategory } = useAppStore()
+  const { profile, effectiveUserId, selectedCategory, account } = useAppStore()
   const category = selectedCategory as TeamCategory
 
   const [tab, setTab] = useState<Tab>('marcar')
@@ -40,7 +40,7 @@ export function AttendancePage() {
   async function handleAddPlayer() {
     if (!effectiveUserId || !newPlayerName.trim()) return
     try {
-      const created = await addPlayer(effectiveUserId, category, newPlayerName.trim())
+      const created = await addPlayer(effectiveUserId, category, newPlayerName.trim(), account?.id ?? null)
       setPlayers(prev => [...prev, created].sort((a, b) => a.full_name.localeCompare(b.full_name)))
       setNewPlayerName('')
       setShowAddPlayer(false)
@@ -73,7 +73,7 @@ export function AttendancePage() {
             onClick={() => setTab('marcar')}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors',
-              tab === 'marcar' ? 'bg-white shadow-sm text-dj-700' : 'text-gray-500 hover:text-gray-700'
+              tab === 'marcar' ? 'bg-white shadow-sm text-neutral2-700' : 'text-gray-500 hover:text-gray-700'
             )}
           >
             <Calendar size={14}/> Marcar
@@ -82,7 +82,7 @@ export function AttendancePage() {
             onClick={() => setTab('resumen')}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors',
-              tab === 'resumen' ? 'bg-white shadow-sm text-dj-700' : 'text-gray-500 hover:text-gray-700'
+              tab === 'resumen' ? 'bg-white shadow-sm text-neutral2-700' : 'text-gray-500 hover:text-gray-700'
             )}
           >
             <BarChart3 size={14}/> Resumen
@@ -134,7 +134,7 @@ export function AttendancePage() {
                 onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
                 placeholder="Nombre del jugador"
                 autoFocus
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
               />
               <Button className="w-full" disabled={!newPlayerName.trim()} onClick={handleAddPlayer}>
                 Agregar
@@ -199,7 +199,7 @@ function MarkAttendanceView({ players, onToast, onAddPlayerClick, onDeletePlayer
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2 bg-dj-800 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-neutral2-800 rounded-xl px-3 py-2">
           <button onClick={() => setDate(d => subDays(d, 1))} className="text-white/60 hover:text-white">
             <ChevronLeft size={18}/>
           </button>
@@ -230,7 +230,7 @@ function MarkAttendanceView({ players, onToast, onAddPlayerClick, onDeletePlayer
                     disabled={saving === player.id}
                     className={clsx(
                       'px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1',
-                      status === true ? 'bg-dj-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-dj-50 hover:text-dj-600',
+                      status === true ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600',
                     )}
                   >
                     <Check size={12}/> Presente
@@ -293,7 +293,7 @@ function SummaryView({ players }: { players: Player[] }) {
             onClick={() => setRangeMode('month')}
             className={clsx(
               'px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors',
-              rangeMode === 'month' ? 'bg-white shadow-sm text-dj-700' : 'text-gray-500',
+              rangeMode === 'month' ? 'bg-white shadow-sm text-neutral2-700' : 'text-gray-500',
             )}
           >
             Mes
@@ -302,7 +302,7 @@ function SummaryView({ players }: { players: Player[] }) {
             onClick={() => setRangeMode('season')}
             className={clsx(
               'px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors',
-              rangeMode === 'season' ? 'bg-white shadow-sm text-dj-700' : 'text-gray-500',
+              rangeMode === 'season' ? 'bg-white shadow-sm text-neutral2-700' : 'text-gray-500',
             )}
           >
             Toda la temporada
@@ -310,7 +310,7 @@ function SummaryView({ players }: { players: Player[] }) {
         </div>
 
         {rangeMode === 'month' && (
-          <div className="flex items-center gap-2 bg-dj-800 rounded-xl px-3 py-1.5">
+          <div className="flex items-center gap-2 bg-neutral2-800 rounded-xl px-3 py-1.5">
             <button onClick={() => setRefMonth(d => subMonths(d, 1))} className="text-white/60 hover:text-white">
               <ChevronLeft size={16}/>
             </button>
@@ -341,7 +341,7 @@ function SummaryView({ players }: { players: Player[] }) {
                   <div
                     className={clsx(
                       'h-full rounded-full',
-                      s.percentage >= 80 ? 'bg-dj-600' : s.percentage >= 50 ? 'bg-amber-500' : 'bg-red-500',
+                      s.percentage >= 80 ? 'bg-emerald-600' : s.percentage >= 50 ? 'bg-amber-500' : 'bg-red-500',
                     )}
                     style={{ width: `${s.percentage}%` }}
                   />
