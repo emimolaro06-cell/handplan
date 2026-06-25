@@ -5,38 +5,41 @@ import { useEffect, useState } from 'react'
 
 import { useAppStore } from '@/lib/store'
 import { getSessions } from '@/lib/supabase'
-import { TEAM_CATEGORY_BG, TEAM_CATEGORY_STYLES, CLUB_NAME } from '@/lib/constants'
+import { TEAM_CATEGORY_BG, TEAM_CATEGORY_STYLES } from '@/lib/constants'
 import type { TrainingSession } from '@/types'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export function MenuPage() {
   const navigate = useNavigate()
-  const { profile, selectedCategory } = useAppStore()
+  const { profile, account, effectiveUserId, selectedCategory } = useAppStore()
   const [recent, setRecent] = useState<TrainingSession[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!profile) return
-    getSessions(profile.id, { team_category: selectedCategory ?? undefined })
+    if (!effectiveUserId) return
+    getSessions(effectiveUserId, { team_category: selectedCategory ?? undefined })
       .then(({ data }) => {
         setRecent(((data as TrainingSession[]) ?? []).slice(0, 3))
         setLoading(false)
       })
-  }, [profile, selectedCategory])
+  }, [effectiveUserId, selectedCategory])
 
   const catStyle = selectedCategory ? TEAM_CATEGORY_STYLES[selectedCategory] : null
+  const color = account?.primary_color || '#1e8a1e'
+  const logoUrl = account?.logo_url || '/logo-handplan.svg'
+  const accountName = account?.name || 'HandPlan'
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero header verde */}
-      <div className="bg-dj-900 px-6 pt-10 pb-16">
+      {/* Hero header */}
+      <div className="px-6 pt-10 pb-16" style={{ backgroundColor: color }}>
         <div className="max-w-lg mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <img src="/logo.svg" alt="Logo" className="w-10 h-10"/>
+            <img src={logoUrl} alt={accountName} className="w-10 h-10 object-contain"/>
             <div>
-              <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">
-                {CLUB_NAME}
+              <p className="text-white/80 text-xs font-bold uppercase tracking-widest">
+                {accountName}
               </p>
               <p className="text-white/60 text-xs">
                 {profile?.full_name}
@@ -80,7 +83,8 @@ export function MenuPage() {
         {/* Biblioteca */}
         <button
           onClick={() => navigate('/biblioteca')}
-          className="group w-full flex items-center gap-5 bg-dj-700 hover:bg-dj-800 rounded-2xl p-5 text-left shadow-lg transition-all active:scale-[0.98]"
+          className="group w-full flex items-center gap-5 hover:opacity-90 rounded-2xl p-5 text-left shadow-lg transition-all active:scale-[0.98]"
+          style={{ backgroundColor: color }}
         >
           <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
             <BookOpen size={28} className="text-white"/>

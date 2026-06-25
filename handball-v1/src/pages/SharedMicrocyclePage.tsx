@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/index'
 import { supabase } from '@/lib/supabase'
 import { getSharedMicrocycleByToken, listDaysInWeek } from '@/lib/cycles'
 import { CLUB_NAME } from '@/lib/constants'
-import type { Macrocycle, MicrocycleDay, ContentCategory } from '@/types'
+import type { Macrocycle, MicrocycleDay, ContentCategory, Account } from '@/types'
 
 const WEEK_LABELS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO']
 
@@ -29,6 +29,7 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
 export function SharedMicrocyclePage() {
   const { token } = useParams<{ token: string }>()
   const [macro, setMacro] = useState<Macrocycle | null>(null)
+  const [account, setAccount] = useState<Account | null>(null)
   const [days, setDays] = useState<MicrocycleDay[]>([])
   const [weekStart, setWeekStart] = useState<Date | null>(null)
   const [error, setError] = useState(false)
@@ -46,7 +47,18 @@ export function SharedMicrocyclePage() {
           .select('*')
           .eq('id', shared.macrocycle_id)
           .single()
-        if (macroData) setMacro(macroData as Macrocycle)
+        if (macroData) {
+          setMacro(macroData as Macrocycle)
+          // Identidad de la cuenta del coach dueño de este macrociclo, para una vista
+          // pública sin login que igual respete los colores/logo del club correspondiente.
+          const { data: profile } = await supabase
+            .from('profiles').select('account_id').eq('id', (macroData as any).user_id).maybeSingle()
+          if (profile?.account_id) {
+            const { data: acc } = await supabase
+              .from('accounts').select('*').eq('id', profile.account_id).maybeSingle()
+            if (acc) setAccount(acc as Account)
+          }
+        }
 
         const weekDays = await listDaysInWeek(shared.macrocycle_id, start)
         setDays(weekDays)
@@ -55,9 +67,12 @@ export function SharedMicrocyclePage() {
       .finally(() => setLoading(false))
   }, [token])
 
+  const color = account?.primary_color || '#1e8a1e'
+  const accountName = account?.name || CLUB_NAME
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dj-900">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: color }}>
         <Spinner size={36}/>
       </div>
     )
@@ -65,7 +80,7 @@ export function SharedMicrocyclePage() {
 
   if (error || !weekStart) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dj-900 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: color }}>
         <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
           <p className="text-gray-700 font-semibold">Este link no es válido o ya no está disponible.</p>
         </div>
@@ -88,8 +103,8 @@ export function SharedMicrocyclePage() {
     <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-6xl mx-auto space-y-4">
         {/* Header */}
-        <div className="bg-dj-800 rounded-2xl px-5 py-4 text-center">
-          <p className="text-yellow-300 text-xs font-bold uppercase tracking-wide">{CLUB_NAME}</p>
+        <div className="rounded-2xl px-5 py-4 text-center" style={{ backgroundColor: color }}>
+          <p className="text-white/70 text-xs font-bold uppercase tracking-wide">{accountName}</p>
           <h1 className="text-white font-bold font-display text-xl mt-1">
             {macro?.name}{macro?.team_category ? ` — ${macro.team_category}` : ''}
           </h1>
@@ -112,8 +127,8 @@ export function SharedMicrocyclePage() {
             return (
               <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                 {/* Header del día */}
-                <div className="bg-dj-700 text-center py-2">
-                  <p className="text-yellow-300 text-xs font-bold uppercase tracking-wide">{WEEK_LABELS[i]}</p>
+                <div className="text-center py-2" style={{ backgroundColor: color }}>
+                  <p className="text-white/70 text-xs font-bold uppercase tracking-wide">{WEEK_LABELS[i]}</p>
                   <p className="text-white text-sm font-bold">{format(date, 'd/MM')}</p>
                 </div>
 
@@ -166,7 +181,7 @@ export function SharedMicrocyclePage() {
         </div>
 
         <p className="text-center text-gray-400 text-xs pt-2">
-          Planificación compartida desde la app de {CLUB_NAME}.
+          Planificación compartida desde la app de {accountName}.
         </p>
       </div>
     </div>

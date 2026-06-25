@@ -1,37 +1,52 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { FileDown } from 'lucide-react'
-import { getSharedSession } from '@/lib/supabase'
+import { getSharedSession, supabase } from '@/lib/supabase'
 import { downloadTrainingPDF } from '@/lib/pdf'
 import { Spinner } from '@/components/ui/index'
 import { CLUB_NAME } from '@/lib/constants'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import type { TrainingSession } from '@/types'
+import type { TrainingSession, Account } from '@/types'
 
 export function SharedSessionPage() {
   const { token } = useParams<{ token: string }>()
   const [session, setSession] = useState<TrainingSession | null>(null)
+  const [account, setAccount] = useState<Account | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
   useEffect(() => {
     if (!token) { setError(true); setLoading(false); return }
-    getSharedSession(token).then(({ data, error: err }) => {
-      if (err || !data) setError(true)
-      else setSession(data as TrainingSession)
+    getSharedSession(token).then(async ({ data, error: err }) => {
+      if (err || !data) { setError(true); setLoading(false); return }
+      const s = data as TrainingSession
+      setSession(s)
+      // Identidad de la cuenta del coach dueño de este entrenamiento, para una vista
+      // pública sin login que igual respete los colores/logo del club correspondiente.
+      const { data: profile } = await supabase
+        .from('profiles').select('account_id').eq('id', s.user_id).maybeSingle()
+      if (profile?.account_id) {
+        const { data: acc } = await supabase
+          .from('accounts').select('*').eq('id', profile.account_id).maybeSingle()
+        if (acc) setAccount(acc as Account)
+      }
       setLoading(false)
     })
   }, [token])
 
+  const color = account?.primary_color || '#1e8a1e'
+  const accountName = account?.name || CLUB_NAME
+  const logoUrl = account?.logo_url || '/logo-handplan.svg'
+
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-dj-900">
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: color }}>
       <Spinner size={36}/>
     </div>
   )
 
   if (error || !session) return (
-    <div className="min-h-screen flex items-center justify-center bg-dj-900">
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: color }}>
       <div className="text-center">
         <p className="text-white font-bold text-lg mb-2">Enlace no válido</p>
         <p className="text-white/50 text-sm">Este entrenamiento no existe o el enlace expiró.</p>
@@ -44,11 +59,11 @@ export function SharedSessionPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-dj-900 px-6 py-5">
+      <div className="px-6 py-5" style={{ backgroundColor: color }}>
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3 mb-3">
-            <img src="/logo-dj.png" alt="Logo" className="w-10 h-10 object-contain"/>
-            <p className="text-gold-400 text-xs font-bold uppercase tracking-widest">{CLUB_NAME}</p>
+            <img src={logoUrl} alt={accountName} className="w-10 h-10 object-contain"/>
+            <p className="text-white/80 text-xs font-bold uppercase tracking-widest">{accountName}</p>
           </div>
           <h1 className="text-2xl font-bold text-white font-display">
             Sesión {session.session_number} — {session.team_category}
@@ -57,8 +72,8 @@ export function SharedSessionPage() {
             {format(new Date(session.session_date), "d 'de' MMMM yyyy", { locale: es })} · {session.coach_name} · {session.total_duration_min} min
           </p>
           <button
-            onClick={() => downloadTrainingPDF(session)}
-            className="mt-4 inline-flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-gray-900 font-bold text-sm px-4 py-2 rounded-xl transition-colors"
+            onClick={() => downloadTrainingPDF(session, account)}
+            className="mt-4 inline-flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-900 font-bold text-sm px-4 py-2 rounded-xl transition-colors"
           >
             <FileDown size={16}/> Descargar PDF
           </button>
@@ -95,8 +110,8 @@ export function SharedSessionPage() {
         <h2 className="font-bold text-gray-900">Momentos</h2>
         {sorted.map((m, i) => (
           <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3 bg-dj-900">
-              <div className="w-7 h-7 rounded-lg bg-gold-400 text-gray-900 text-xs font-bold flex items-center justify-center">
+            <div className="flex items-center gap-3 px-4 py-3" style={{ backgroundColor: color }}>
+              <div className="w-7 h-7 rounded-lg bg-white text-gray-900 text-xs font-bold flex items-center justify-center">
                 {i + 1}
               </div>
               <p className="text-white font-semibold text-sm">
@@ -123,3 +138,4 @@ export function SharedSessionPage() {
     </div>
   )
 }
+
