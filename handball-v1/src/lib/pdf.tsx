@@ -29,15 +29,15 @@ function buildStyles(green: string, secondary: string, placeholderBg: string, pl
     headerRight:  { width: 95, padding: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: WHITE },
 
     clubName:     { color: WHITE,  fontSize: 16, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5 },
-    sessionLabel: { color: secondary, fontSize: 20, fontFamily: 'Helvetica-Bold', marginTop: 4, textDecoration: 'underline' },
+    sessionLabel: { color: WHITE, fontSize: 20, fontFamily: 'Helvetica-Bold', marginTop: 4, textDecoration: 'underline' },
     tagRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 },
-    tag:          { backgroundColor: secondary, color: DARK, fontSize: 10, fontFamily: 'Helvetica-Bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+    tag:          { color: DARK, fontSize: 10, fontFamily: 'Helvetica-Bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
 
     dateRow:    { flexDirection: 'row', gap: 8, marginBottom: 4 },
-    dateLabel:  { color: secondary, fontSize: 13, fontFamily: 'Helvetica-Bold' },
+    dateLabel:  { color: WHITE, fontSize: 13, fontFamily: 'Helvetica-Bold' },
     dateValue:  { color: WHITE,  fontSize: 13, fontFamily: 'Helvetica-Bold' },
     contentRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    contentLabel: { color: secondary, fontSize: 12, fontFamily: 'Helvetica-Bold' },
+    contentLabel: { color: WHITE, fontSize: 12, fontFamily: 'Helvetica-Bold' },
     contentBox:   { backgroundColor: WHITE, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, flex: 1 },
     contentText:  { color: DARK, fontSize: 11, fontFamily: 'Helvetica-Bold' },
     objectiveText: { color: WHITE, fontSize: 10, marginTop: 3 },
@@ -125,7 +125,11 @@ function TrainingDocument({ session, account }: { session: TrainingSession; acco
             <Text style={s.clubName}>{accountName}</Text>
             <Text style={s.sessionLabel}>Sesión: {session.session_number}</Text>
             <View style={s.tagRow}>
-              {uniqueCats.map(cat => <Text key={cat} style={s.tag}>{(cat as string).toUpperCase()}</Text>)}
+              {uniqueCats.map(cat => (
+                <Text key={cat} style={[s.tag, { backgroundColor: secondary }]}>
+                  {(cat as string).toUpperCase()}
+                </Text>
+              ))}
             </View>
           </View>
           <View style={s.headerCenter}>
