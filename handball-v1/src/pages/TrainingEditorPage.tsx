@@ -141,7 +141,7 @@ export function TrainingEditorPage() {
     const sessionData = { ...formData, status }
     let result
     if (isEdit && sessionId) result = await updateSession(sessionId, sessionData, momentRows)
-    else result = await createSession(effectiveUserId, sessionData, momentRows)
+    else result = await createSession(effectiveUserId, sessionData, momentRows, account?.id ?? null)
     setSaving(false)
     if (result.error) { setToast({ msg: 'Error al guardar.', type: 'error' }); return null }
     if (!isEdit && result.data) setSessionId(result.data.id)
