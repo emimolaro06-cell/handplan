@@ -78,7 +78,7 @@ export function MonthlyDocument({ plan, date, account }: {
   const calDays    = eachDayOfInterval({ start: calStart, end: calEnd })
 
   const accountName = account?.name || CLUB_NAME
-  const logoUrl = account?.logo_url || `${window.location.origin}/logo-dj.png`
+  const logoUrl = account?.logo_url || `${window.location.origin}/logo-handplan.png`
   const green = account?.primary_color || GREEN_DEFAULT
   const s = buildStyles(green)
 

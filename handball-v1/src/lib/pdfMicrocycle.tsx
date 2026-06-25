@@ -154,7 +154,7 @@ function DayCol({ label, day, subcontents, s }: {
 
 function MicrocycleDocument({ input }: { input: MicrocyclePDFInput }) {
   const accountName = input.account?.name || CLUB_NAME
-  const logoUrl = input.account?.logo_url || `${window.location.origin}/logo-dj.png`
+  const logoUrl = input.account?.logo_url || `${window.location.origin}/logo-handplan.png`
   const green = input.account?.primary_color || GREEN_DEFAULT
   const s = buildStyles(green)
 

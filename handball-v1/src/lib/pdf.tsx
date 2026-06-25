@@ -103,7 +103,7 @@ function TrainingDocument({ session, account }: { session: TrainingSession; acco
   const sorted = [...session.moments].sort((a, b) => a.order_index - b.order_index)
 
   const accountName = account?.name || CLUB_NAME
-  const logoUrl = account?.logo_url || `${window.location.origin}/logo-dj.png`
+  const logoUrl = account?.logo_url || `${window.location.origin}/logo-handplan.png`
   const green = account?.primary_color || GREEN_DEFAULT
   const s = buildStyles(green)
 
