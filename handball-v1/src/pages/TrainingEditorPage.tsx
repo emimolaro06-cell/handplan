@@ -214,7 +214,7 @@ export function TrainingEditorPage() {
         {/* Datos generales */}
         <Card>
           <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-dj-700 text-white text-xs flex items-center justify-center font-bold">1</span>
+            <span className="w-6 h-6 rounded-lg bg-neutral2-700 text-white text-xs flex items-center justify-center font-bold">1</span>
             Datos generales
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -249,7 +249,7 @@ export function TrainingEditorPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-dj-700 text-white text-xs flex items-center justify-center font-bold">2</span>
+                <span className="w-6 h-6 rounded-lg bg-neutral2-700 text-white text-xs flex items-center justify-center font-bold">2</span>
                 Momentos
               </h2>
               <div className={`flex items-center gap-1.5 mt-1 text-xs font-medium ${durationDiff > 5 ? 'text-amber-600' : 'text-gray-500'}`}>
@@ -356,7 +356,7 @@ export function TrainingEditorPage() {
               <input value={shareUrl} readOnly
                 className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700 bg-gray-50"/>
               <button onClick={copyShareUrl}
-                className="flex items-center gap-1.5 bg-dj-600 hover:bg-dj-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors">
+                className="flex items-center gap-1.5 bg-neutral2-700 hover:bg-neutral2-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors">
                 {copied ? <Check size={14}/> : <Copy size={14}/>}
                 {copied ? 'Copiado' : 'Copiar'}
               </button>
