@@ -62,10 +62,10 @@ export async function getExerciseLabels() {
   return supabase.from('exercise_labels').select('*').order('label')
 }
 
-export async function addExerciseLabel(label: string, userId: string) {
+export async function addExerciseLabel(label: string, userId: string, accountId: string) {
   return supabase
     .from('exercise_labels')
-    .insert({ label: label.trim(), created_by: userId })
+    .insert({ label: label.trim(), created_by: userId, account_id: accountId })
     .select()
     .single()
 }
