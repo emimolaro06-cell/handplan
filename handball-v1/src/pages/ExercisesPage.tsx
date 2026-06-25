@@ -20,7 +20,7 @@ interface ExForm {
 }
 
 export function ExercisesPage() {
-  const { profile } = useAppStore()
+  const { profile, account } = useAppStore()
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [categories, setCategories] = useState<ExerciseCategoryRow[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -67,7 +67,7 @@ export function ExercisesPage() {
       const { url } = await uploadImage('exercises', imgFile)
       image_url = url
     }
-    const { data: ex, error } = await createExercise({ ...data, image_url, created_by: profile.id })
+    const { data: ex, error } = await createExercise({ ...data, image_url, created_by: profile.id, account_id: account?.id })
     setSubmitting(false)
     if (error) { setToast({ msg: 'Error al guardar.', type: 'error' }); return }
     setExercises(p => [ex as Exercise, ...p])
@@ -99,7 +99,7 @@ export function ExercisesPage() {
 
   async function handleAddCategory() {
     if (!newCatLabel.trim() || !profile) return
-    const { data, error } = await addExerciseCategory(newCatLabel.trim(), profile.id)
+    const { data, error } = await addExerciseCategory(newCatLabel.trim(), profile.id, account!.id)
     if (error || !data) { setToast({ msg: 'Error al agregar categoría.', type: 'error' }); return }
     setCategories(p => [...p, data as ExerciseCategoryRow].sort((a, b) => a.category.localeCompare(b.category)))
     setNewCatLabel('')

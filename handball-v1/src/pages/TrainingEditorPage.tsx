@@ -272,7 +272,7 @@ export function TrainingEditorPage() {
                     onChange={updated => updateMoment(m.id, updated)}
                     onRemove={() => removeMoment(m.id)}
                     onMoveUp={() => moveUp(i)} onMoveDown={() => moveDown(i)}
-                    userId={effectiveUserId ?? ''}/>
+                    userId={effectiveUserId ?? ''} accountId={account?.id ?? null}/>
                 ))}
               </div>
             </SortableContext>
