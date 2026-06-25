@@ -8,11 +8,11 @@ type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'go
 type BtnSize = 'xs' | 'sm' | 'md' | 'lg'
 
 const BV: Record<BtnVariant, string> = {
-  primary:   'bg-dj-600 hover:bg-dj-700 text-white border-transparent shadow-sm',
+  primary:   'bg-neutral2-800 hover:bg-neutral2-900 text-white border-transparent shadow-sm',
   secondary: 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200 shadow-sm',
   ghost:     'bg-transparent hover:bg-gray-100 text-gray-700 border-transparent',
   danger:    'bg-red-600 hover:bg-red-700 text-white border-transparent shadow-sm',
-  success:   'bg-dj-600 hover:bg-dj-700 text-white border-transparent shadow-sm',
+  success:   'bg-neutral2-800 hover:bg-neutral2-900 text-white border-transparent shadow-sm',
   gold:      'bg-gold-500 hover:bg-gold-600 text-gray-900 border-transparent shadow-sm',
 }
 const BS: Record<BtnSize, string> = {
@@ -33,7 +33,7 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(
       className={clsx(
         'inline-flex items-center justify-center font-medium rounded-xl border',
         'transition-all duration-150 active:scale-[0.97]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dj-400 focus-visible:ring-offset-1',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral2-400 focus-visible:ring-offset-1',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         BV[variant], BS[size], className,
       )}
@@ -63,7 +63,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref} id={fid}
           className={clsx(
             'w-full rounded-xl border px-3 py-2 text-sm text-gray-900 bg-white placeholder:text-gray-400',
-            'focus:outline-none focus:ring-2 focus:ring-dj-400 focus:border-dj-400 transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-neutral2-400 focus:border-neutral2-400 transition-colors',
             error ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300',
             className,
           )}
@@ -91,7 +91,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TAProps>(
           ref={ref} id={fid}
           className={clsx(
             'w-full rounded-xl border px-3 py-2 text-sm text-gray-900 bg-white placeholder:text-gray-400 resize-none',
-            'focus:outline-none focus:ring-2 focus:ring-dj-400 focus:border-dj-400 transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-neutral2-400 focus:border-neutral2-400 transition-colors',
             error ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300',
             className,
           )}
@@ -121,7 +121,7 @@ export const Select = forwardRef<HTMLSelectElement, SelProps>(
           ref={ref} id={fid}
           className={clsx(
             'w-full rounded-xl border px-3 py-2 text-sm text-gray-900 bg-white cursor-pointer',
-            'focus:outline-none focus:ring-2 focus:ring-dj-400 focus:border-dj-400 transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-neutral2-400 focus:border-neutral2-400 transition-colors',
             error ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300',
             className,
           )}
@@ -152,7 +152,7 @@ export function Card({ className, children, padded=true, ...p }:
 // ─── Badge ───────────────────────────────────────────────────────────────────
 type BadgeColor = 'green' | 'blue' | 'amber' | 'red' | 'purple' | 'gray' | 'sky'
 const BC: Record<BadgeColor, string> = {
-  green:  'bg-dj-100 text-dj-800',
+  green:  'bg-neutral2-100 text-neutral2-800',
   blue:   'bg-blue-100 text-blue-800',
   amber:  'bg-amber-100 text-amber-800',
   red:    'bg-red-100 text-red-800',
@@ -173,7 +173,7 @@ export function Badge({ color='gray', children, className }:
 // ─── Spinner ──────────────────────────────────────────────────────────────────
 export function Spinner({ size=24 }: { size?: number }) {
   return (
-    <svg className="animate-spin text-dj-600" width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <svg className="animate-spin text-neutral2-700" width={size} height={size} viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
     </svg>
@@ -197,7 +197,7 @@ export function Empty({ icon, title, description, action }: {
 // ─── Toast ───────────────────────────────────────────────────────────────────
 type ToastType = 'success' | 'error' | 'warning'
 const TT: Record<ToastType, { bg: string; icon: React.ReactNode }> = {
-  success: { bg: 'bg-dj-700',  icon: <CheckCircle size={18}/> },
+  success: { bg: 'bg-neutral2-800', icon: <CheckCircle size={18}/> },
   error:   { bg: 'bg-red-600', icon: <XCircle size={18}/> },
   warning: { bg: 'bg-amber-500', icon: <AlertCircle size={18}/> },
 }
