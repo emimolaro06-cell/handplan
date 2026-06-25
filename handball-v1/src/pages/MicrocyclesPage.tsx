@@ -250,7 +250,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
     <div className="space-y-4">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-dj-600 text-xs font-bold uppercase tracking-wide mb-0.5">Macrociclo</p>
+          <p className="text-neutral2-600 text-xs font-bold uppercase tracking-wide mb-0.5">Macrociclo</p>
           <h1 className="text-2xl font-bold text-gray-900 font-display">{macro.name}</h1>
           <p className="text-gray-500 text-sm mt-0.5">Planificación anual</p>
         </div>
@@ -262,7 +262,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                 const selected = allMacros.find(m => m.id === e.target.value)
                 if (selected) onSelectMacro(selected)
               }}
-              className="text-sm rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dj-400"
+              className="text-sm rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-neutral2-400"
             >
               {allMacros.map(m => (
                 <option key={m.id} value={m.id}>{m.name}</option>
@@ -294,7 +294,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                   value={newSeasonName}
                   onChange={e => setNewSeasonName(e.target.value)}
                   placeholder={`Ej: Temporada ${new Date().getFullYear() + 1}`}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                 />
               </div>
               <div>
@@ -303,7 +303,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                   type="date"
                   value={newSeasonDate}
                   onChange={e => setNewSeasonDate(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                 />
               </div>
               <Button
@@ -357,7 +357,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                   onChange={e => setAnnualObjective(e.target.value)}
                   rows={4}
                   placeholder="Ej: Consolidar la base técnica individual..."
-                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                 />
               </div>
               <div>
@@ -367,7 +367,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                   onChange={e => setAnnualObservations(e.target.value)}
                   rows={4}
                   placeholder="Notas generales de la temporada..."
-                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                 />
               </div>
             </div>
@@ -406,7 +406,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
           <select
             value={pieCategory}
             onChange={e => setPieCategory(e.target.value as ContentCategory | '')}
-            className="text-sm rounded-xl border border-gray-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-dj-400"
+            className="text-sm rounded-xl border border-gray-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral2-400"
           >
             <option value="">Elegí una categoría...</option>
             {CONTENT_CATEGORIES.map(c => (
@@ -452,7 +452,7 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-gray-800 text-sm">Mesociclo (mes) y sus microciclos (semanas)</h3>
-          <div className="flex items-center gap-2 bg-dj-800 rounded-xl px-3 py-1.5">
+          <div className="flex items-center gap-2 bg-neutral2-800 rounded-xl px-3 py-1.5">
             <button onClick={() => setCurrentMonth(d => subMonths(d, 1))} className="text-white/60 hover:text-white">
               <ChevronLeft size={16}/>
             </button>
@@ -476,16 +476,16 @@ function MacroView({ macro, allMacros, onSelectMacro, onCreateMacro, onUpdateMac
                   onClick={() => onOpenWeek(week.weekStart)}
                   className={clsx(
                     'w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left',
-                    hasContent ? 'border-dj-300 bg-dj-50 hover:border-dj-500' : 'border-gray-100 bg-gray-50 hover:border-gray-300',
+                    hasContent ? 'border-neutral2-300 bg-neutral2-50 hover:border-neutral2-500' : 'border-gray-100 bg-gray-50 hover:border-gray-300',
                   )}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Calendar size={15} className={hasContent ? 'text-dj-600' : 'text-gray-400'}/>
+                    <Calendar size={15} className={hasContent ? 'text-neutral2-600' : 'text-gray-400'}/>
                     <span className="font-semibold text-gray-800 text-sm">{week.label}</span>
                   </div>
                   <span className={clsx(
                     'text-xs font-bold px-2.5 py-1 rounded-lg',
-                    hasContent ? 'bg-dj-600 text-white' : 'text-gray-400',
+                    hasContent ? 'bg-neutral2-700 text-white' : 'text-gray-400',
                   )}>
                     {hasContent ? 'Con contenido' : 'Vacío'}
                   </span>
@@ -666,7 +666,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-dj-600">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
           <ChevronLeft size={16}/> Volver al año
         </button>
         <div className="flex gap-2">
@@ -682,7 +682,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
         </div>
       </div>
 
-      <div className="bg-dj-800 rounded-2xl px-5 py-3">
+      <div className="rounded-2xl px-5 py-3" style={{ backgroundColor: account?.primary_color || '#125712' }}>
         <h2 className="text-white font-bold font-display text-lg">Microciclo semanal</h2>
         <p className="text-white/60 text-xs mt-0.5">
           {format(weekStart, "d 'de' MMMM", { locale: es })} – {format(weekEnd, "d 'de' MMMM yyyy", { locale: es })}
@@ -699,6 +699,7 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
               label={WEEK_LABELS[i]}
               date={date}
               day={day}
+              account={account}
               onAddLabel={label => handleAddLabel(key, label)}
               onRemoveLabel={idx => handleRemoveLabel(key, idx)}
               onAddMoment={() => handleAddMoment(key)}
@@ -730,10 +731,11 @@ function MicrocycleEditor({ macro, weekStart, onBack, onToast }: {
 // ════════════════════════════════════════════════════════════════════════════
 // COLUMNA DEL DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory, onMomentSubcontent, subcontents, onAddSubcontent, onImageUpload, onImageRemove }: {
+function DayColumn({ label, date, day, account, onAddLabel, onRemoveLabel, onAddMoment, onRemoveMoment, onMomentChange, onMomentCategory, onMomentSubcontent, subcontents, onAddSubcontent, onImageUpload, onImageRemove }: {
   label: string
   date: Date
   day: MicrocycleDay
+  account?: { primary_color?: string | null } | null
   onAddLabel: (v: string) => void
   onRemoveLabel: (idx: number) => void
   onAddMoment: () => void
@@ -761,8 +763,8 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
       {/* Header del día */}
-      <div className="bg-dj-700 text-center py-2">
-        <p className="text-yellow-300 text-xs font-bold uppercase tracking-wide">{label}</p>
+      <div className="text-center py-2" style={{ backgroundColor: account?.primary_color || '#125712' }}>
+        <p className="text-white text-xs font-bold uppercase tracking-wide">{label}</p>
         <p className="text-white text-sm font-bold">{format(date, 'd/MM')}</p>
       </div>
 
@@ -785,7 +787,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-dj-300 hover:text-dj-500 transition-colors flex items-center justify-center gap-1"
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-neutral2-300 hover:text-neutral2-500 transition-colors flex items-center justify-center gap-1"
           >
             <ImagePlus size={14}/> <span className="text-[10px] font-medium">Imagen</span>
           </button>
@@ -821,7 +823,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
           onKeyDown={handleLabelKeyDown}
           onBlur={() => { if (newLabel.trim()) { onAddLabel(newLabel); setNewLabel('') } }}
           placeholder="+ Etiqueta (Enter)"
-          className="w-full text-[10px] rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-dj-400 placeholder:text-gray-300"
+          className="w-full text-[10px] rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral2-400 placeholder:text-gray-300"
         />
 
         {/* Separador */}
@@ -844,7 +846,7 @@ function DayColumn({ label, date, day, onAddLabel, onRemoveLabel, onAddMoment, o
           ))}
           <button
             onClick={onAddMoment}
-            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-dj-300 hover:text-dj-500 transition-colors flex items-center justify-center"
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-2 text-gray-300 hover:border-neutral2-300 hover:text-neutral2-500 transition-colors flex items-center justify-center"
           >
             <Plus size={15}/>
           </button>
@@ -870,7 +872,7 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
   const [showCatPicker, setShowCatPicker] = useState(false)
   const [newSubLabel, setNewSubLabel] = useState('')
   const [addingSub, setAddingSub] = useState(false)
-  const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-dj-100 text-dj-900'
+  const colorClass = moment.category ? CONTENT_COLOR[moment.category] : 'bg-neutral2-100 text-neutral2-900'
 
   const subOptions = moment.category ? subcontents.filter(s => s.category === moment.category) : []
   const currentSub = subcontents.find(s => s.id === moment.subcontent_id)
@@ -975,12 +977,12 @@ function MomentBlock({ index, moment, onChange, onCategory, onSubcontent, subcon
                       onChange={e => setNewSubLabel(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleCreateSub()}
                       placeholder="Nuevo subcontenido..."
-                      className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dj-400"
+                      className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                     />
                     <button
                       onClick={handleCreateSub}
                       disabled={addingSub || !newSubLabel.trim()}
-                      className="shrink-0 bg-dj-600 text-white rounded-xl px-3 disabled:opacity-40"
+                      className="shrink-0 bg-neutral2-700 text-white rounded-xl px-3 disabled:opacity-40"
                     >
                       <Plus size={14}/>
                     </button>
@@ -1044,7 +1046,7 @@ function ShareModal({ macrocycleId, weekStart, onClose, onToast }: {
           ) : (
             <div className="flex items-center gap-2">
               <input readOnly value={url ?? ''} className="flex-1 text-xs rounded-xl border border-gray-200 px-3 py-2 bg-gray-50 text-gray-600"/>
-              <button onClick={handleCopy} className="shrink-0 bg-dj-600 text-white rounded-xl px-3 py-2 hover:bg-dj-700 transition-colors">
+              <button onClick={handleCopy} className="shrink-0 bg-neutral2-700 text-white rounded-xl px-3 py-2 hover:bg-neutral2-800 transition-colors">
                 {copied ? <Check size={15}/> : <Copy size={15}/>}
               </button>
             </div>
