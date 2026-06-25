@@ -42,25 +42,26 @@ export interface MicrocyclePDFInput {
   account?: Account | null
 }
 
-function buildStyles(green: string, secondary: string) {
+function buildStyles(green: string, secondary: string, headerBg: string, titleColor: string) {
   return StyleSheet.create({
     page: { backgroundColor: '#2d2d2d', padding: 14, fontFamily: 'Helvetica' },
 
     header: {
-      backgroundColor: green, flexDirection: 'row', alignItems: 'center',
+      backgroundColor: headerBg, flexDirection: 'row', alignItems: 'center',
       justifyContent: 'space-between', borderRadius: 8, padding: 10, marginBottom: 10,
       border: `2px solid ${secondary}`,
     },
     logoReal:  { width: 50, height: 50 },
+    logoBox:   { width: 60, height: 60, backgroundColor: WHITE, borderRadius: 6, alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb' },
     titleBox:  { flex: 1, alignItems: 'center' },
-    title:     { color: secondary, fontSize: 18, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', textAlign: 'center' },
-    subtitle:  { color: WHITE, fontSize: 10, marginTop: 3 },
+    title:     { color: titleColor, fontSize: 18, fontFamily: 'Helvetica-Bold', textDecoration: 'underline', textAlign: 'center' },
+    subtitle:  { color: titleColor, fontSize: 10, marginTop: 3 },
 
     grid: { flexDirection: 'row', gap: 6, flex: 1 },
     col:  { flex: 1, flexDirection: 'column' },
 
     dayHeader: { backgroundColor: shade(green, 0.15), borderRadius: 6, paddingVertical: 6, alignItems: 'center', marginBottom: 5 },
-    dayName:   { color: secondary, fontSize: 9, fontFamily: 'Helvetica-Bold' },
+    dayName:   { color: WHITE, fontSize: 9, fontFamily: 'Helvetica-Bold' },
     dayDate:   { color: WHITE, fontSize: 11, fontFamily: 'Helvetica-Bold', marginTop: 1 },
 
     rivalImg: { width: '100%', height: 50, objectFit: 'contain', marginBottom: 4, borderRadius: 4 },
@@ -161,7 +162,11 @@ function MicrocycleDocument({ input }: { input: MicrocyclePDFInput }) {
   const green = input.account?.primary_color || GREEN_DEFAULT
   const isDyJ = !input.account || input.account.primary_color === GREEN_DEFAULT
   const secondary = isDyJ ? YELLOW : GRAY_SECONDARY
-  const s = buildStyles(green, secondary)
+  // Para DyJ el header mantiene su verde con letras blancas de siempre.
+  // Para cualquier otra cuenta, el header pasa a blanco con letras negras.
+  const headerBg = isDyJ ? green : WHITE
+  const titleColor = isDyJ ? WHITE : DARK
+  const s = buildStyles(green, secondary, headerBg, titleColor)
 
   const activeDays = input.days
     .map((day, i) => ({ day, label: WEEK_LABELS[i] }))
@@ -178,14 +183,20 @@ function MicrocycleDocument({ input }: { input: MicrocyclePDFInput }) {
     <Document title={`Mesociclo ${input.mesocycleNumber} - Microciclo ${input.microcycleNumber}`}>
       <Page size="A4" orientation="landscape" style={s.page}>
         <View style={s.header}>
-          <Image src={logoUrl} style={s.logoReal as Record<string, unknown>}/>
+          {isDyJ && (
+            <View style={s.logoBox}>
+              <Image src={logoUrl} style={s.logoReal as Record<string, unknown>}/>
+            </View>
+          )}
           <View style={s.titleBox}>
             <Text style={s.title}>
               MESOCICLO {input.mesocycleNumber} | MICROCICLO {input.microcycleNumber}
             </Text>
             <Text style={s.subtitle}>{accountName}</Text>
           </View>
-          <Image src={logoUrl} style={s.logoReal as Record<string, unknown>}/>
+          <View style={s.logoBox}>
+            <Image src={logoUrl} style={s.logoReal as Record<string, unknown>}/>
+          </View>
         </View>
 
         <View style={s.grid}>
