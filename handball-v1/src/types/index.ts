@@ -188,11 +188,14 @@ export interface Player {
   created_at: string
 }
 
+export type AttendanceStatus = 'presente' | 'ausente' | 'lesionado'
+
 export interface AttendanceRecord {
   id: string
   player_id: string
   date: string       // 'yyyy-MM-dd'
-  present: boolean
+  turno: string       // 'Preparación física' | 'Pelota' | turno libre puntual
+  status: AttendanceStatus
   created_at: string
 }
 
