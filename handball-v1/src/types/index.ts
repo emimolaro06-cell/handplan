@@ -32,7 +32,7 @@ export interface Profile {
   id: string
   username: string
   full_name: string
-  role: 'admin' | 'coach'
+  role: 'admin' | 'coach' | 'preparador_fisico'
   categories: TeamCategory[]
   club_name: string
   avatar_color: string
