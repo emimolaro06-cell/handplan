@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Save, FileDown, Plus, X, ChevronDown, ChevronUp, CalendarDays, LayoutGrid } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday } from 'date-fns'
+import { ChevronLeft, ChevronRight, Save, FileDown, Plus, X, ChevronDown, ChevronUp, CalendarDays, LayoutGrid, AlertTriangle } from 'lucide-react'
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -36,6 +36,10 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
   'Táctica OFENSIVA':  'TAC OF',
   'Táctica DEFENSIVA': 'TAC DEF',
   'MIXTO': 'MIXTO',
+  'Gimnasio': 'GIMNASIO',
+  'Habilidades': 'HABILIDADES',
+  'Condición Física': 'COND. FÍSICA',
+  'Evaluaciones Físicas': 'EVAL. FÍSICA',
 }
 
 const CONTENT_COLOR: Record<ContentCategory, string> = {
@@ -44,6 +48,10 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
   'Táctica OFENSIVA':  'bg-amber-500 text-white',
   'Táctica DEFENSIVA': 'bg-purple-600 text-white',
   'MIXTO': 'bg-gray-600 text-white',
+  'Gimnasio': 'bg-indigo-300 text-indigo-900',
+  'Habilidades': 'bg-indigo-500 text-white',
+  'Condición Física': 'bg-indigo-800 text-white',
+  'Evaluaciones Físicas': 'bg-red-600 text-white',
 }
 
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -59,6 +67,21 @@ export function MonthlyPlanPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [showDayModal, setShowDayModal] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
+  const [dismissedEvalAlerts, setDismissedEvalAlerts] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('handplan_dismissed_eval_alerts') ?? '[]')
+    } catch {
+      return []
+    }
+  })
+
+  function dismissEvalAlert(dateKey: string) {
+    setDismissedEvalAlerts(prev => {
+      const next = [...prev, dateKey]
+      localStorage.setItem('handplan_dismissed_eval_alerts', JSON.stringify(next))
+      return next
+    })
+  }
 
   const year  = currentDate.getFullYear()
   const month = currentDate.getMonth() + 1
@@ -151,6 +174,15 @@ export function MonthlyPlanPage() {
 
   const selectedDayData = selectedDay ? getDayData(new Date(selectedDay + 'T12:00:00')) : null
 
+  // Evaluaciones Físicas en hoy + los próximos 3 días, que el entrenador todavía no cerró.
+  const today = new Date()
+  const upcomingEvalDays = plan
+    ? [0, 1, 2, 3]
+        .map(offset => format(addDays(today, offset), 'yyyy-MM-dd'))
+        .filter(key => plan.days[key]?.contents.includes('Evaluaciones Físicas'))
+        .filter(key => !dismissedEvalAlerts.includes(key))
+    : []
+
   return (
     <div className="space-y-4 pb-8">
       {/* ── Header ── */}
@@ -210,6 +242,25 @@ export function MonthlyPlanPage() {
           </div>
         )}
       </div>
+
+      {/* Alertas: Evaluaciones Físicas próximas (hoy + 3 días), hasta que el entrenador las cierre */}
+      {upcomingEvalDays.map(dateKey => (
+        <div
+          key={dateKey}
+          className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3"
+        >
+          <AlertTriangle size={18} className="text-red-500 flex-shrink-0"/>
+          <p className="text-sm text-red-700 flex-1">
+            Hay una <span className="font-bold">evaluación física</span> el{' '}
+            <span className="font-bold capitalize">
+              {format(new Date(dateKey + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}
+            </span>
+          </p>
+          <button onClick={() => dismissEvalAlert(dateKey)} className="text-red-400 hover:text-red-600 flex-shrink-0">
+            <X size={16}/>
+          </button>
+        </div>
+      ))}
 
       {/* ── VISTA MICROCICLOS (Macrociclo → Mesociclo → Microciclos → Editor) ── */}
       {viewMode === 'cycles' && <MicrocyclesPage/>}
