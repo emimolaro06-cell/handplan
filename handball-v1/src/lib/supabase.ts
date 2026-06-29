@@ -243,16 +243,30 @@ export async function getSharedSession(token: string) {
 
 // Busca, dentro de la misma cuenta, qué coach tiene la categoría dada en su lista de categorías.
 // Devuelve null si ninguna categoría coincide (ej: Minis/Infantiles, que no tienen preparador asignado).
+// Busca, dentro de la misma cuenta, qué coach PRINCIPAL tiene la categoría dada en su lista.
+// Excluye explícitamente a cualquier perfil que sea Ayudante Técnico de alguien (assistant_links),
+// ya que un AT también puede tener role='coach' y las mismas categorías cargadas, y eso generaría
+// más de un resultado para la misma categoría.
+// Devuelve null si ninguna categoría coincide (ej: Minis/Infantiles, que no tienen preparador asignado).
 export async function findCoachByCategory(accountId: string, teamCategory: string) {
+  const { data: assistants } = await supabase
+    .from('assistant_links')
+    .select('assistant_id')
+  const assistantIds = new Set((assistants ?? []).map((a: { assistant_id: string }) => a.assistant_id))
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, categories')
     .eq('account_id', accountId)
     .eq('role', 'coach')
     .contains('categories', [teamCategory])
-    .maybeSingle()
+
   if (error) return { data: null, error }
-  return { data: data as { id: string; full_name: string; categories: string[] } | null, error: null }
+
+  const candidates = ((data ?? []) as { id: string; full_name: string; categories: string[] }[])
+    .filter(p => !assistantIds.has(p.id))
+
+  return { data: candidates[0] ?? null, error: null }
 }
 
 export async function createTrainerLink(trainerId: string, coachId: string, teamCategory: string) {
