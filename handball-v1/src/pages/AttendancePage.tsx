@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus,
 } from 'lucide-react'
-import { format, addMonths, subMonths } from 'date-fns'
+import { format, addMonths, subMonths, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
@@ -142,6 +143,10 @@ export function AttendancePage() {
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
           />
+
+          {activeTurno === 'Preparación física' && (
+            <PSEChart players={players} refMonth={refMonth}/>
+          )}
 
           <CombinedSummary players={players} refMonth={refMonth} allTurnos={allTurnos}/>
         </>
@@ -562,6 +567,105 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
 // ════════════════════════════════════════════════════════════════════════════
 // RESUMEN COMBINADO — % de cada turno + % combinado
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// GRÁFICO DE PSE — promedio semanal (Percepción Subjetiva del Esfuerzo), solo
+// para la pestaña "Preparación física". Barras coloreadas por nivel de esfuerzo:
+// verde (1-5), amarillo (6-8), rojo (9-10).
+// ════════════════════════════════════════════════════════════════════════════
+function pseColor(value: number): string {
+  if (value <= 5) return '#639922'
+  if (value <= 8) return '#eda100'
+  return '#e34948'
+}
+
+function PSEChart({ players, refMonth }: {
+  players: Player[]; refMonth: Date
+}) {
+  const [selected, setSelected] = useState<string>('__team__')
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const playerIds = useMemo(() => players.map(p => p.id), [players])
+  const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
+
+  useEffect(() => {
+    setLoading(true)
+    getAttendanceInRange(playerIds, start, end)
+      .then(all => setRecords(all.filter(r => r.turno === 'Preparación física')))
+      .finally(() => setLoading(false))
+  }, [playerIds.join(','), start, end])
+
+  const relevant = useMemo(
+    () => records.filter(r => r.status === 'presente' && r.pse != null && (selected === '__team__' || r.player_id === selected)),
+    [records, selected],
+  )
+
+  const weeklyData = useMemo(() => {
+    const buckets = new Map<string, { sum: number; count: number; weekStart: Date }>()
+    relevant.forEach(r => {
+      const day = new Date(r.date + 'T12:00:00')
+      const weekStart = startOfWeek(day, { weekStartsOn: 1 })
+      const key = format(weekStart, 'yyyy-MM-dd')
+      const bucket = buckets.get(key) ?? { sum: 0, count: 0, weekStart }
+      bucket.sum += r.pse as number
+      bucket.count += 1
+      buckets.set(key, bucket)
+    })
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, b], i) => ({
+        label: `Sem ${i + 1}`,
+        fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
+        promedio: Math.round((b.sum / b.count) * 10) / 10,
+      }))
+  }, [relevant])
+
+  if (loading) return null
+  if (weeklyData.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <p className="text-sm font-semibold text-gray-800">PSE semanal — Percepción Subjetiva del Esfuerzo</p>
+        <select
+          value={selected}
+          onChange={e => setSelected(e.target.value)}
+          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-neutral2-400"
+        >
+          <option value="__team__">Equipo</option>
+          {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
+      </div>
+
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer>
+          <BarChart data={weeklyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <CartesianGrid stroke="#e1e0d9" vertical={false}/>
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false}/>
+            <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
+            <Tooltip
+              formatter={(value: number) => [value, 'PSE promedio']}
+              labelFormatter={(label: string) => {
+                const match = weeklyData.find(d => d.label === label)
+                return match?.fullLabel ?? label
+              }}
+            />
+            <Bar dataKey="promedio" radius={[4, 4, 0, 0]} maxBarSize={48}>
+              {weeklyData.map((d, i) => <Cell key={i} fill={pseColor(d.promedio)}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#639922' }}/>1-5 bajo</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#eda100' }}/>6-8 medio</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#e34948' }}/>9-10 alto</span>
+      </div>
+    </div>
+  )
+}
+
 function CombinedSummary({ players, refMonth, allTurnos }: {
   players: Player[]; refMonth: Date; allTurnos: string[]
 }) {
