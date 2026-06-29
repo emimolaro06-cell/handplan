@@ -200,6 +200,7 @@ export interface AttendanceRecord {
   date: string       // 'yyyy-MM-dd'
   turno: string       // 'Preparación física' | 'Pelota' | turno libre puntual
   status: AttendanceStatus
+  pse: number | null  // Percepción Subjetiva del Esfuerzo, 1-10. Solo aplica con status='presente' en Preparación física.
   created_at: string
 }
 
