@@ -15,6 +15,10 @@ export type ContentCategory =
   | 'Táctica OFENSIVA'
   | 'Táctica DEFENSIVA'
   | 'MIXTO'
+  | 'Gimnasio'
+  | 'Habilidades'
+  | 'Condición Física'
+  | 'Evaluaciones Físicas'
 
 // ─── Categorías de ejercicio ─────────────────────────────────────────────────
 export type ExerciseCategory =
