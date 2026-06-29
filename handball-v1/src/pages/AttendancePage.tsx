@@ -10,7 +10,7 @@ import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
 import {
   listPlayers, addPlayer, deletePlayer,
-  getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus, setAttendancePSE,
+  getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus, clearAttendanceDay, setAttendancePSE,
   computeAttendanceSummary, getMonthRange,
   getAttendanceHeader, saveAttendanceHeader, downloadAttendanceExcel,
 } from '@/lib/attendance'
@@ -417,6 +417,19 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     }
   }
 
+  async function handleClearDay(date: string) {
+    const label = format(new Date(date + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })
+    if (!confirm(`¿Borrar todos los registros del ${label}? Esta acción no se puede deshacer.`)) return
+    try {
+      await clearAttendanceDay(date, turno)
+      setRecords(prev => prev.filter(r => r.date !== date))
+      setExtraDays(prev => prev.filter(d => d !== date))
+      onPSEChange()
+    } catch {
+      onToast({ msg: 'Error al borrar el día.', type: 'error' })
+    }
+  }
+
   const summary = useMemo(() => computeAttendanceSummary(players, records), [players, records])
   const todayKey = format(new Date(), 'yyyy-MM-dd')
 
@@ -525,7 +538,18 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                       d === todayKey ? 'text-neutral2-700 bg-neutral2-50' : 'text-gray-500',
                     )}
                   >
-                    {format(new Date(d + 'T12:00:00'), 'dd/MM')}
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{format(new Date(d + 'T12:00:00'), 'dd/MM')}</span>
+                      {isPhysical && (
+                        <button
+                          onClick={() => handleClearDay(d)}
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                          title="Borrar este día"
+                        >
+                          <Trash2 size={11}/>
+                        </button>
+                      )}
+                    </div>
                   </th>
                 ))}
                 <th className="px-3 py-2 border-b border-gray-100 font-semibold text-neutral2-700 text-center sticky right-0 bg-gray-50">%</th>
