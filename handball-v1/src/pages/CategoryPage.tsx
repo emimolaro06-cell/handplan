@@ -22,7 +22,12 @@ export function CategoryPage() {
     setSelected(cat)
     // Para el Preparador Físico, elegir una categoría también fija con qué coach está
     // trabajando ahora mismo — effectiveUserId pasa a ser el id de ESE coach específico.
-    if (isTrainer && coachId) setEffectiveUserId(coachId)
+    // Se persiste en localStorage para que un refresh de página no lo pierda.
+    if (isTrainer && coachId) {
+      setEffectiveUserId(coachId)
+      localStorage.setItem('handplan_trainer_active_coach', coachId)
+      localStorage.setItem('handplan_trainer_active_category', cat)
+    }
   }
 
   function handleContinue() {
