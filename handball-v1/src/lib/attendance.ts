@@ -196,3 +196,61 @@ export async function saveAttendanceHeader(
     )
   if (error) throw error
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPORTAR A EXCEL — un archivo con una hoja por turno (Pelota, Preparación física)
+// ════════════════════════════════════════════════════════════════════════════
+
+const STATUS_LETTER: Record<AttendanceStatus, string> = {
+  presente: 'P', ausente: 'A', lesionado: 'L',
+}
+
+export async function downloadAttendanceExcel(input: {
+  category: string
+  monthLabel: string         // ej: "Junio 2026", para el nombre del archivo
+  players: Player[]
+  sheets: {
+    turno: string             // nombre visible de la hoja (ej: "Pelota", "Preparación física")
+    coachName: string
+    assistantName: string
+    days: string[]            // 'yyyy-MM-dd', ya ordenados
+    records: AttendanceRecord[]
+    includePSE: boolean
+  }[]
+}): Promise<void> {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+
+  for (const sheet of input.sheets) {
+    const rows: (string | number)[][] = []
+
+    rows.push([input.category])
+    rows.push([`Entrenador / Preparador: ${sheet.coachName || '—'}`])
+    rows.push([`Asistente técnico: ${sheet.assistantName || '—'}`])
+    rows.push([])
+
+    const header = ['Jugador']
+    sheet.days.forEach(d => {
+      header.push(d)
+      if (sheet.includePSE) header.push('PSE')
+    })
+    rows.push(header)
+
+    input.players.forEach(player => {
+      const row: (string | number)[] = [player.full_name]
+      sheet.days.forEach(d => {
+        const rec = sheet.records.find(r => r.player_id === player.id && r.date === d)
+        row.push(rec ? STATUS_LETTER[rec.status] : '')
+        if (sheet.includePSE) row.push(rec?.pse ?? '')
+      })
+      rows.push(row)
+    })
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 22 }, ...sheet.days.flatMap(() => sheet.includePSE ? [{ wch: 10 }, { wch: 6 }] : [{ wch: 10 }])]
+    XLSX.utils.book_append_sheet(wb, ws, sheet.turno.slice(0, 31))
+  }
+
+  const fileName = `asistencia_${input.category.replace(/\s+/g, '_')}_${input.monthLabel.replace(/\s+/g, '_')}.xlsx`
+  XLSX.writeFile(wb, fileName)
+}
