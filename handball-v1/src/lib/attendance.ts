@@ -80,6 +80,18 @@ export async function setAttendanceStatus(
   if (error) throw error
 }
 
+// Actualiza el PSE de un registro de asistencia que YA existe (el jugador ya fue marcado
+// presente ese día/turno — el PSE no crea una fila nueva, solo completa una existente).
+export async function setAttendancePSE(playerId: string, date: string, turno: string, pse: number | null): Promise<void> {
+  const { error } = await supabase
+    .from('attendance')
+    .update({ pse })
+    .eq('player_id', playerId)
+    .eq('date', date)
+    .eq('turno', turno)
+  if (error) throw error
+}
+
 // Quita la marca de un jugador en una fecha y turno (vuelve a "sin registrar")
 export async function clearAttendanceStatus(playerId: string, date: string, turno: string): Promise<void> {
   const { error } = await supabase
