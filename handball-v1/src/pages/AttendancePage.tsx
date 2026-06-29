@@ -11,6 +11,7 @@ import {
   listPlayers, addPlayer, deletePlayer,
   getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus,
   computeAttendanceSummary, getMonthRange,
+  getAttendanceHeader, saveAttendanceHeader,
 } from '@/lib/attendance'
 import { ATTENDANCE_FIXED_SHIFTS } from '@/lib/constants'
 import type { Player, AttendanceRecord, AttendanceStatus, TeamCategory } from '@/types'
@@ -31,11 +32,10 @@ export function AttendancePage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [newPlayerName, setNewPlayerName] = useState('')
 
-  // Encabezado de texto libre y mes — separado por turno, persistido solo en memoria de la sesión
+  // Encabezado de texto libre y mes — separado por turno
   const [activeTurno, setActiveTurno] = useState<string>(ATTENDANCE_FIXED_SHIFTS[0])
   const [extraTurnos, setExtraTurnos] = useState<string[]>([])
   const [refMonth, setRefMonth] = useState(new Date())
-  const [headerInfo, setHeaderInfo] = useState<Record<string, { coach: string; assistant: string }>>({})
 
   const [showAddTurno, setShowAddTurno] = useState(false)
   const [newTurnoName, setNewTurnoName] = useState('')
@@ -73,13 +73,6 @@ export function AttendancePage() {
     } catch {
       setToast({ msg: 'Error al eliminar.', type: 'error' })
     }
-  }
-
-  function updateHeader(turno: string, field: 'coach' | 'assistant', value: string) {
-    setHeaderInfo(prev => ({
-      ...prev,
-      [turno]: { coach: prev[turno]?.coach ?? '', assistant: prev[turno]?.assistant ?? '', [field]: value },
-    }))
   }
 
   function handleAddTurno() {
@@ -142,10 +135,10 @@ export function AttendancePage() {
             key={activeTurno}
             players={players}
             turno={activeTurno}
+            category={category}
+            coachId={effectiveUserId}
             refMonth={refMonth}
             setRefMonth={setRefMonth}
-            headerInfo={headerInfo[activeTurno] ?? { coach: '', assistant: '' }}
-            onHeaderChange={(field, value) => updateHeader(activeTurno, field, value)}
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
           />
@@ -222,13 +215,13 @@ export function AttendancePage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE UN TURNO — jugadores × días del mes
 // ════════════════════════════════════════════════════════════════════════════
-function AttendanceGrid({ players, turno, refMonth, setRefMonth, headerInfo, onHeaderChange, onDeletePlayer, onToast }: {
+function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast }: {
   players: Player[]
   turno: string
+  category: string
+  coachId: string | null
   refMonth: Date
   setRefMonth: (updater: (d: Date) => Date) => void
-  headerInfo: { coach: string; assistant: string }
-  onHeaderChange: (field: 'coach' | 'assistant', value: string) => void
   onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
 }) {
@@ -237,6 +230,30 @@ function AttendanceGrid({ players, turno, refMonth, setRefMonth, headerInfo, onH
   const [menuFor, setMenuFor] = useState<{ playerId: string; date: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const todayColRef = useRef<HTMLTableCellElement>(null)
+
+  const [headerInfo, setHeaderInfo] = useState({ coach: '', assistant: '' })
+  const [headerLoading, setHeaderLoading] = useState(true)
+
+  useEffect(() => {
+    if (!coachId || !category) { setHeaderLoading(false); return }
+    setHeaderLoading(true)
+    getAttendanceHeader(coachId, category, turno)
+      .then(h => setHeaderInfo({ coach: h.coach_name, assistant: h.assistant_name }))
+      .finally(() => setHeaderLoading(false))
+  }, [coachId, category, turno])
+
+  async function handleHeaderChange(field: 'coach' | 'assistant', value: string) {
+    const next = { ...headerInfo, [field]: value }
+    setHeaderInfo(next)
+    if (!coachId || !category) return
+    try {
+      await saveAttendanceHeader(coachId, category, turno, {
+        coach_name: next.coach, assistant_name: next.assistant,
+      })
+    } catch {
+      onToast({ msg: 'Error al guardar el encabezado.', type: 'error' })
+    }
+  }
 
   const playerIds = useMemo(() => players.map(p => p.id), [players])
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
@@ -308,7 +325,7 @@ function AttendanceGrid({ players, turno, refMonth, setRefMonth, headerInfo, onH
             </label>
             <input
               value={headerInfo.coach}
-              onChange={e => onHeaderChange('coach', e.target.value)}
+              onChange={e => handleHeaderChange('coach', e.target.value)}
               placeholder="Nombre"
               className="text-sm font-medium text-gray-800 border-b border-dashed border-gray-200 focus:outline-none focus:border-neutral2-400 px-1 w-32"
             />
@@ -317,7 +334,7 @@ function AttendanceGrid({ players, turno, refMonth, setRefMonth, headerInfo, onH
             <label className="text-xs text-gray-400">Asistente técnico:</label>
             <input
               value={headerInfo.assistant}
-              onChange={e => onHeaderChange('assistant', e.target.value)}
+              onChange={e => handleHeaderChange('assistant', e.target.value)}
               placeholder="Nombre"
               className="text-sm font-medium text-gray-800 border-b border-dashed border-gray-200 focus:outline-none focus:border-neutral2-400 px-1 w-32"
             />
