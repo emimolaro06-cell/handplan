@@ -303,7 +303,9 @@ function AttendanceGrid({ players, turno, refMonth, setRefMonth, headerInfo, onH
       <div className="flex items-center justify-between flex-wrap gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-400">Entrenador:</label>
+            <label className="text-xs text-gray-400">
+              {turno === 'Preparación física' ? 'Preparador físico:' : 'Entrenador:'}
+            </label>
             <input
               value={headerInfo.coach}
               onChange={e => onHeaderChange('coach', e.target.value)}
