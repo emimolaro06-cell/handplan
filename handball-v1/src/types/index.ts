@@ -5,6 +5,7 @@ export type TeamCategory =
   | 'Menores A' | 'Menores B'
   | 'Cadetes A' | 'Cadetes B'
   | 'Juveniles A' | 'Juveniles B'
+  | 'Juniors A' | 'Juniors B'
   | 'Primera A' | 'Primera B'
 
 // ─── Categorías de contenido ─────────────────────────────────────────────────
