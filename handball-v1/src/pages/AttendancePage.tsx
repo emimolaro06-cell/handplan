@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus,
+  X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus, FileDown,
 } from 'lucide-react'
 import { format, addMonths, subMonths, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -12,7 +12,7 @@ import {
   listPlayers, addPlayer, deletePlayer,
   getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus, setAttendancePSE,
   computeAttendanceSummary, getMonthRange,
-  getAttendanceHeader, saveAttendanceHeader,
+  getAttendanceHeader, saveAttendanceHeader, downloadAttendanceExcel,
 } from '@/lib/attendance'
 import { ATTENDANCE_FIXED_SHIFTS } from '@/lib/constants'
 import type { Player, AttendanceRecord, AttendanceStatus, TeamCategory } from '@/types'
@@ -86,6 +86,44 @@ export function AttendancePage() {
     setShowAddTurno(false)
   }
 
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExportExcel() {
+    if (!effectiveUserId || !category || players.length === 0) return
+    setExporting(true)
+    try {
+      const { start, end } = getMonthRange(refMonth)
+      const all = await getAttendanceInRange(players.map(p => p.id), start, end)
+
+      const sheets = await Promise.all(
+        ATTENDANCE_FIXED_SHIFTS.map(async turno => {
+          const header = await getAttendanceHeader(effectiveUserId, category, turno)
+          const records = all.filter(r => r.turno === turno)
+          const days = Array.from(new Set(records.map(r => r.date))).sort()
+          return {
+            turno,
+            coachName: header.coach_name,
+            assistantName: header.assistant_name,
+            days,
+            records,
+            includePSE: turno === 'Preparación física',
+          }
+        })
+      )
+
+      await downloadAttendanceExcel({
+        category,
+        monthLabel: format(refMonth, 'MMMM_yyyy', { locale: es }),
+        players,
+        sheets,
+      })
+    } catch {
+      setToast({ msg: 'Error al exportar a Excel.', type: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -93,9 +131,14 @@ export function AttendancePage() {
           <h1 className="text-2xl font-bold text-gray-900 font-display">Asistencia</h1>
           <p className="text-gray-500 text-sm mt-0.5">{category}</p>
         </div>
-        <Button variant="secondary" size="sm" icon={<UserPlus size={15}/>} onClick={() => setShowAddPlayer(true)}>
-          Agregar jugador
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" icon={<FileDown size={15}/>} loading={exporting} onClick={handleExportExcel}>
+            Excel
+          </Button>
+          <Button variant="secondary" size="sm" icon={<UserPlus size={15}/>} onClick={() => setShowAddPlayer(true)}>
+            Agregar jugador
+          </Button>
+        </div>
       </div>
 
       {loading ? (
