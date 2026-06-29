@@ -8,6 +8,7 @@ export const TEAM_CATEGORIES: TeamCategory[] = [
   'Menores A', 'Menores B',
   'Cadetes A', 'Cadetes B',
   'Juveniles A', 'Juveniles B',
+  'Juniors A', 'Juniors B',
   'Primera A', 'Primera B',
 ]
 
@@ -41,6 +42,8 @@ export const TEAM_CATEGORY_STYLES: Record<TeamCategory, { bg: string; text: stri
   'Cadetes B':    { bg: 'bg-amber-100',  text: 'text-amber-800',  dot: 'bg-amber-400' },
   'Juveniles A':  { bg: 'bg-purple-100', text: 'text-purple-800', dot: 'bg-purple-600' },
   'Juveniles B':  { bg: 'bg-purple-100', text: 'text-purple-800', dot: 'bg-purple-400' },
+  'Juniors A':    { bg: 'bg-teal-100',   text: 'text-teal-800',   dot: 'bg-teal-600' },
+  'Juniors B':    { bg: 'bg-teal-100',   text: 'text-teal-800',   dot: 'bg-teal-400' },
   'Primera A':    { bg: 'bg-red-100',    text: 'text-red-800',    dot: 'bg-red-600' },
   'Primera B':    { bg: 'bg-red-100',    text: 'text-red-800',    dot: 'bg-red-400' },
 }
@@ -56,6 +59,8 @@ export const TEAM_CATEGORY_BG: Record<TeamCategory, string> = {
   'Cadetes B':    'bg-amber-400',
   'Juveniles A':  'bg-purple-600',
   'Juveniles B':  'bg-purple-400',
+  'Juniors A':    'bg-teal-600',
+  'Juniors B':    'bg-teal-400',
   'Primera A':    'bg-red-600',
   'Primera B':    'bg-red-400',
 }
