@@ -41,6 +41,8 @@ export async function signUpWithUsername(
 }
 
 export async function signOut() {
+  localStorage.removeItem('handplan_trainer_active_coach')
+  localStorage.removeItem('handplan_trainer_active_category')
   return supabase.auth.signOut()
 }
 
