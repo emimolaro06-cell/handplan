@@ -66,7 +66,11 @@ export function RegisterPage() {
     if (profile) { setProfile(profile); navigate(isAdmin ? '/admin' : '/categoria') }
   }
 
-  const baseCats = ['Minis', 'Infantiles', 'Menores', 'Cadetes', 'Juveniles', 'Primera']
+  // Se derivan las categorías "base" (sin A/B) directamente de TEAM_CATEGORIES,
+  // así cualquier categoría nueva agregada en constants.ts aparece acá sin tocar este archivo.
+  const baseCats = Array.from(
+    new Set(TEAM_CATEGORIES.map(cat => cat.replace(/ [AB]$/, '')))
+  )
   const color = account?.primary_color || '#1e8a1e'
 
   return (
@@ -88,7 +92,7 @@ export function RegisterPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Nombre completo</label>
                 <input placeholder="Ej: Emanuel García"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                   {...register('full_name', { required: 'Obligatorio' })}/>
                 {errors.full_name && <p className="text-xs text-red-600">{errors.full_name.message}</p>}
               </div>
@@ -96,7 +100,7 @@ export function RegisterPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Nombre de usuario</label>
                 <input placeholder="Ej: emi_garcia"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                   {...register('username', {
                     required: 'Obligatorio',
                     pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Solo letras, números y guión bajo' }
@@ -118,7 +122,7 @@ export function RegisterPage() {
                         return (
                           <button key={cat} type="button" onClick={() => toggleCat(cat)}
                             className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
-                              sel ? 'bg-dj-600 border-dj-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-dj-400'
+                              sel ? 'bg-neutral2-700 border-neutral2-700 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-neutral2-400'
                             }`}>
                             {cat} {sel && <Check size={14}/>}
                           </button>
@@ -128,7 +132,7 @@ export function RegisterPage() {
                   ))}
                 </div>
                 {selectedCats.length > 0 && (
-                  <p className="text-xs text-dj-600 mt-2 font-medium">
+                  <p className="text-xs text-neutral2-600 mt-2 font-medium">
                     ✓ {selectedCats.length} categoría{selectedCats.length > 1 ? 's' : ''} seleccionada{selectedCats.length > 1 ? 's' : ''}
                   </p>
                 )}
@@ -144,7 +148,7 @@ export function RegisterPage() {
                 {showAdminCode && (
                   <div className="mt-2">
                     <input type="password" placeholder="Código de administrador"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                       {...register('admin_code')}/>
                   </div>
                 )}
@@ -155,7 +159,7 @@ export function RegisterPage() {
               )}
 
               <button type="submit" disabled={isSubmitting}
-                className="w-full bg-dj-600 hover:bg-dj-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50">
+                className="w-full bg-neutral2-700 hover:bg-neutral2-800 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50">
                 {isSubmitting ? 'Creando perfil...' : 'Crear perfil'}
               </button>
             </form>
