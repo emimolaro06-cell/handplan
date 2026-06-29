@@ -238,3 +238,49 @@ export async function getSharedSession(token: string) {
   if (error || !data) return { data: null, error }
   return getSessionById((data as { session_id: string }).session_id)
 }
+
+// ─── Preparador Físico — vínculos por categoría ───────────────────────────────
+
+// Busca, dentro de la misma cuenta, qué coach tiene la categoría dada en su lista de categorías.
+// Devuelve null si ninguna categoría coincide (ej: Minis/Infantiles, que no tienen preparador asignado).
+export async function findCoachByCategory(accountId: string, teamCategory: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, categories')
+    .eq('account_id', accountId)
+    .eq('role', 'coach')
+    .contains('categories', [teamCategory])
+    .maybeSingle()
+  if (error) return { data: null, error }
+  return { data: data as { id: string; full_name: string; categories: string[] } | null, error: null }
+}
+
+export async function createTrainerLink(trainerId: string, coachId: string, teamCategory: string) {
+  return supabase
+    .from('physical_trainer_links')
+    .insert({ trainer_id: trainerId, coach_id: coachId, team_category: teamCategory })
+    .select()
+    .single()
+}
+
+export interface TrainerLink {
+  id: string
+  trainer_id: string
+  coach_id: string
+  team_category: string
+  created_at: string
+}
+
+export async function getTrainerLinks(trainerId: string) {
+  const { data, error } = await supabase
+    .from('physical_trainer_links')
+    .select('*')
+    .eq('trainer_id', trainerId)
+    .order('team_category')
+  if (error) throw error
+  return (data ?? []) as TrainerLink[]
+}
+
+export async function deleteTrainerLink(id: string) {
+  return supabase.from('physical_trainer_links').delete().eq('id', id)
+}
