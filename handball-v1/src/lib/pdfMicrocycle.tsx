@@ -22,6 +22,10 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
   'Táctica OFENSIVA':  'TAC OF',
   'Táctica DEFENSIVA': 'TAC DEF',
   'MIXTO': 'MIXTO',
+  'Gimnasio': 'GIMNASIO',
+  'Habilidades': 'HABILIDADES',
+  'Condición Física': 'COND. FÍSICA',
+  'Evaluaciones Físicas': 'EVAL. FÍSICA',
 }
 
 // Mismos colores que la pantalla, en hex (PDF no entiende clases de Tailwind)
@@ -31,6 +35,10 @@ const CONTENT_PDF_COLOR: Record<ContentCategory, string> = {
   'Técnica individual DEFENSIVA': '#1e3a8a',
   'Táctica DEFENSIVA': '#3b82f6',
   'MIXTO': '#4b5563',
+  'Gimnasio': '#a5b4fc',
+  'Habilidades': '#6366f1',
+  'Condición Física': '#3730a3',
+  'Evaluaciones Físicas': '#dc2626',
 }
 
 export interface MicrocyclePDFInput {

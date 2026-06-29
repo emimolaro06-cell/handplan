@@ -18,6 +18,10 @@ const CONTENT_SHORT: Record<ContentCategory, string> = {
   'Táctica OFENSIVA':  'TAC OF',
   'Táctica DEFENSIVA': 'TAC DEF',
   'MIXTO': 'MIXTO',
+  'Gimnasio': 'GIMNASIO',
+  'Habilidades': 'HABILIDADES',
+  'Condición Física': 'COND. FÍSICA',
+  'Evaluaciones Físicas': 'EVAL. FÍSICA',
 }
 
 const CONTENT_BG: Record<ContentCategory, string> = {
@@ -26,6 +30,10 @@ const CONTENT_BG: Record<ContentCategory, string> = {
   'Táctica OFENSIVA':  '#b45309',
   'Táctica DEFENSIVA': '#7c3aed',
   'MIXTO': '#4b5563',
+  'Gimnasio': '#a5b4fc',
+  'Habilidades': '#6366f1',
+  'Condición Física': '#3730a3',
+  'Evaluaciones Físicas': '#dc2626',
 }
 
 function buildStyles(green: string, secondary: string) {
