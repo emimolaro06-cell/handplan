@@ -18,6 +18,10 @@ export const CONTENT_CATEGORIES: ContentCategory[] = [
   'Táctica OFENSIVA',
   'Táctica DEFENSIVA',
   'MIXTO',
+  'Gimnasio',
+  'Habilidades',
+  'Condición Física',
+  'Evaluaciones Físicas',
 ]
 
 export const EXERCISE_CATEGORIES: ExerciseCategory[] = [
