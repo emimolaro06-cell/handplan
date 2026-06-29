@@ -51,6 +51,10 @@ const CONTENT_COLOR: Record<ContentCategory, string> = {
   'Técnica individual DEFENSIVA': 'bg-blue-700 text-white',
   'Táctica DEFENSIVA': 'bg-blue-400 text-white',
   'MIXTO': 'bg-gray-600 text-white',
+  'Gimnasio': 'bg-indigo-300 text-indigo-900',
+  'Habilidades': 'bg-indigo-500 text-white',
+  'Condición Física': 'bg-indigo-800 text-white',
+  'Evaluaciones Físicas': 'bg-red-600 text-white',
 }
 
 export function MicrocyclesPage() {
