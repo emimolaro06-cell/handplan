@@ -23,11 +23,19 @@ async function resolveEffectiveUser(userId: string, role: string, ownCategories:
         }
       })
     )
+
+    // Restaurar la última categoría/coach elegida, si sigue siendo un vínculo válido —
+    // así un refresh de página no deja a la pantalla colgada esperando una selección perdida.
+    const savedCoachId = localStorage.getItem('handplan_trainer_active_coach')
+    const savedCategory = localStorage.getItem('handplan_trainer_active_category')
+    const matchingOption = options.find(o => o.coachId === savedCoachId && o.category === savedCategory)
+
     return {
-      effectiveUserId: null as string | null,
+      effectiveUserId: matchingOption ? matchingOption.coachId : null,
       assistantOfCoachName: null as string | null,
       effectiveCategories: [] as TeamCategory[],
       trainerLinkOptions: options,
+      restoredCategory: matchingOption ? matchingOption.category : null,
     }
   }
 
@@ -43,6 +51,7 @@ async function resolveEffectiveUser(userId: string, role: string, ownCategories:
       assistantOfCoachName: null as string | null,
       effectiveCategories: ownCategories as TeamCategory[],
       trainerLinkOptions: [],
+      restoredCategory: null as TeamCategory | null,
     }
   }
 
@@ -52,6 +61,7 @@ async function resolveEffectiveUser(userId: string, role: string, ownCategories:
     assistantOfCoachName: coachProfile?.full_name ?? null,
     effectiveCategories: (coachProfile?.categories ?? []) as TeamCategory[],
     trainerLinkOptions: [],
+    restoredCategory: null as TeamCategory | null,
   }
 }
 
@@ -59,18 +69,20 @@ export function useAuth() {
   const {
     profile, setProfile, account, setAccount,
     setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setTrainerLinkOptions,
+    setSelectedCategory,
   } = useAppStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function applyProfile(userId: string, data: any) {
       setProfile(data)
-      const { effectiveUserId, assistantOfCoachName, effectiveCategories, trainerLinkOptions } =
+      const { effectiveUserId, assistantOfCoachName, effectiveCategories, trainerLinkOptions, restoredCategory } =
         await resolveEffectiveUser(userId, data.role, data.categories ?? [])
       setEffectiveUserId(effectiveUserId)
       setAssistantOfCoachName(assistantOfCoachName)
       setEffectiveCategories(effectiveCategories)
       setTrainerLinkOptions(trainerLinkOptions)
+      if (restoredCategory) setSelectedCategory(restoredCategory)
 
       // Si todavía no hay una Cuenta reconocida en el store (ej: el usuario entró
       // directo con sesión guardada, sin pasar por la pantalla de código), la resolvemos
@@ -107,7 +119,7 @@ export function useAuth() {
     )
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setTrainerLinkOptions, setAccount])
+  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setTrainerLinkOptions, setSelectedCategory, setAccount])
 
   return { profile, loading }
 }
