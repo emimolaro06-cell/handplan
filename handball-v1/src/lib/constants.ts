@@ -70,4 +70,6 @@ export const AVATAR_COLORS = [
   '#be185d', '#0f766e', '#c2410c', '#1e40af',
 ]
 
+export const ATTENDANCE_FIXED_SHIFTS = ['Preparación física', 'Pelota'] as const
+
 export const CLUB_NAME = 'HANDBALL DEFENSA Y JUSTICIA'
