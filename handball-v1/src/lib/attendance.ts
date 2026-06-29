@@ -139,3 +139,48 @@ export function getMonthRange(refDate: Date) {
     end: format(endOfMonth(refDate), 'yyyy-MM-dd'),
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENCABEZADO DE ASISTENCIA — nombre de entrenador/preparador y asistente técnico,
+// persistido por categoría + turno (compartido entre quien lo edite: coach, AT o preparador)
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface AttendanceHeader {
+  id: string
+  coach_id: string
+  team_category: string
+  turno: string
+  coach_name: string
+  assistant_name: string
+  updated_at: string
+}
+
+export async function getAttendanceHeader(
+  coachId: string, teamCategory: string, turno: string,
+): Promise<{ coach_name: string; assistant_name: string }> {
+  const { data, error } = await supabase
+    .from('attendance_headers')
+    .select('coach_name, assistant_name')
+    .eq('coach_id', coachId)
+    .eq('team_category', teamCategory)
+    .eq('turno', turno)
+    .maybeSingle()
+  if (error || !data) return { coach_name: '', assistant_name: '' }
+  return data as { coach_name: string; assistant_name: string }
+}
+
+export async function saveAttendanceHeader(
+  coachId: string, teamCategory: string, turno: string,
+  fields: { coach_name: string; assistant_name: string },
+): Promise<void> {
+  // El upsert reemplaza la fila completa en caso de conflicto, así que siempre se manda
+  // el par completo (coach_name + assistant_name) — el llamador es responsable de
+  // combinar el valor que cambió con el que ya tenía antes.
+  const { error } = await supabase
+    .from('attendance_headers')
+    .upsert(
+      { coach_id: coachId, team_category: teamCategory, turno, ...fields, updated_at: new Date().toISOString() },
+      { onConflict: 'coach_id,team_category,turno' },
+    )
+  if (error) throw error
+}
