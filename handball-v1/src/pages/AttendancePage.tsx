@@ -9,7 +9,7 @@ import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
 import {
   listPlayers, addPlayer, deletePlayer,
-  getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus,
+  getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus, setAttendancePSE,
   computeAttendanceSummary, getMonthRange,
   getAttendanceHeader, saveAttendanceHeader,
 } from '@/lib/attendance'
@@ -257,8 +257,12 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
 
   const playerIds = useMemo(() => players.map(p => p.id), [players])
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
+  const isPhysical = turno === 'Preparación física'
 
-  const days = useMemo(() => {
+  // Para Pelota / turnos extra: todos los días del mes, como siempre.
+  // Para Preparación física: arranca vacío y se completa con los días que tengan
+  // registros guardados + los que el preparador agregue manualmente con el botón.
+  const allMonthDays = useMemo(() => {
     const result: string[] = []
     const cursor = new Date(start + 'T12:00:00')
     const endDate = new Date(end + 'T12:00:00')
@@ -269,23 +273,54 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     return result
   }, [start, end])
 
+  const [extraDays, setExtraDays] = useState<string[]>([])
+  const [showAddDay, setShowAddDay] = useState(false)
+  const [newDayValue, setNewDayValue] = useState(format(new Date(), 'yyyy-MM-dd'))
+
+  const daysWithData = useMemo(
+    () => Array.from(new Set(records.map(r => r.date))),
+    [records],
+  )
+
+  const days = isPhysical
+    ? Array.from(new Set([...daysWithData, ...extraDays])).sort()
+    : allMonthDays
+
+  function handleAddDayClick() {
+    const todayKey = format(new Date(), 'yyyy-MM-dd')
+    if (days.includes(todayKey)) {
+      // Ya existe la columna de hoy — llevar el scroll directo ahí en vez de abrir el selector.
+      const el = document.querySelector(`[data-day-col="${todayKey}"]`)
+      el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+      return
+    }
+    setNewDayValue(todayKey)
+    setShowAddDay(true)
+  }
+
+  function confirmAddDay() {
+    if (newDayValue) setExtraDays(prev => Array.from(new Set([...prev, newDayValue])))
+    setShowAddDay(false)
+  }
+
   useEffect(() => {
     setLoading(true)
     getAttendanceInRange(playerIds, start, end)
       .then(all => setRecords(all.filter(r => r.turno === turno)))
       .catch(() => onToast({ msg: 'Error al cargar la asistencia.', type: 'error' }))
       .finally(() => setLoading(false))
+    setExtraDays([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerIds.join(','), start, end, turno])
 
-  // Scroll automático a la columna de hoy, si el mes mostrado es el actual
+  // Scroll automático a la columna de hoy, si existe (en físico puede no existir todavía)
   useEffect(() => {
     if (loading) return
     const t = setTimeout(() => {
       todayColRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' })
     }, 50)
     return () => clearTimeout(t)
-  }, [loading, turno])
+  }, [loading, turno, days.length])
 
   function getStatus(playerId: string, date: string): AttendanceStatus | null {
     const rec = records.find(r => r.player_id === playerId && r.date === date)
@@ -300,14 +335,32 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
         setRecords(prev => prev.filter(r => !(r.player_id === playerId && r.date === date)))
       } else {
         await setAttendanceStatus(playerId, date, turno, status)
+        // El PSE solo tiene sentido con Presente — si cambia a otro estado, se limpia.
+        if (status !== 'presente') {
+          await setAttendancePSE(playerId, date, turno, null).catch(() => {})
+        }
         setRecords(prev => {
           const existing = prev.find(r => r.player_id === playerId && r.date === date)
-          if (existing) return prev.map(r => (r === existing ? { ...r, status } : r))
-          return [...prev, { id: '', player_id: playerId, date, turno, status, created_at: '' }]
+          if (existing) return prev.map(r => (r === existing ? { ...r, status, pse: status === 'presente' ? r.pse : null } : r))
+          return [...prev, { id: '', player_id: playerId, date, turno, status, pse: null, created_at: '' }]
         })
       }
     } catch {
       onToast({ msg: 'Error al guardar.', type: 'error' })
+    }
+  }
+
+  function getPSE(playerId: string, date: string): number | null {
+    const rec = records.find(r => r.player_id === playerId && r.date === date)
+    return rec?.pse ?? null
+  }
+
+  async function handleSetPSE(playerId: string, date: string, pse: number | null) {
+    try {
+      await setAttendancePSE(playerId, date, turno, pse)
+      setRecords(prev => prev.map(r => (r.player_id === playerId && r.date === date ? { ...r, pse } : r)))
+    } catch {
+      onToast({ msg: 'Error al guardar el PSE.', type: 'error' })
     }
   }
 
@@ -340,22 +393,67 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-neutral2-800 rounded-xl px-3 py-1.5">
-          <button onClick={() => setRefMonth(d => subMonths(d, 1))} className="text-white/60 hover:text-white">
-            <ChevronLeft size={16}/>
-          </button>
-          <p className="text-white font-bold text-sm capitalize min-w-28 text-center">
-            {format(refMonth, 'MMMM yyyy', { locale: es })}
-          </p>
-          <button onClick={() => setRefMonth(d => addMonths(d, 1))} className="text-white/60 hover:text-white">
-            <ChevronRight size={16}/>
-          </button>
+        <div className="flex items-center gap-2">
+          {isPhysical && (
+            <button
+              onClick={handleAddDayClick}
+              className="flex items-center gap-1.5 bg-neutral2-700 hover:bg-neutral2-800 text-white text-sm font-medium px-3 py-1.5 rounded-xl transition-colors"
+            >
+              <Plus size={14}/> Agregar día
+            </button>
+          )}
+          <div className="flex items-center gap-2 bg-neutral2-800 rounded-xl px-3 py-1.5">
+            <button onClick={() => setRefMonth(d => subMonths(d, 1))} className="text-white/60 hover:text-white">
+              <ChevronLeft size={16}/>
+            </button>
+            <p className="text-white font-bold text-sm capitalize min-w-28 text-center">
+              {format(refMonth, 'MMMM yyyy', { locale: es })}
+            </p>
+            <button onClick={() => setRefMonth(d => addMonths(d, 1))} className="text-white/60 hover:text-white">
+              <ChevronRight size={16}/>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Selector de fecha para agregar columna de día puntual (Preparación física) */}
+      {showAddDay && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowAddDay(false) }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-sm">Agregar día</h3>
+              <button onClick={() => setShowAddDay(false)} className="text-gray-400 hover:text-gray-700">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <input
+                type="date"
+                value={newDayValue}
+                min={start}
+                max={end}
+                onChange={e => setNewDayValue(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
+              />
+              <Button className="w-full" size="sm" onClick={confirmAddDay}>Agregar</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grilla */}
       {loading ? (
         <p className="text-sm text-gray-400 py-4">Cargando...</p>
+      ) : days.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-10 text-center">
+          <p className="text-sm text-gray-400">Todavía no hay días cargados este mes.</p>
+          <button onClick={handleAddDayClick} className="text-sm text-neutral2-700 font-medium hover:underline mt-1">
+            Agregar el primer día
+          </button>
+        </div>
       ) : (
         <div ref={scrollRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
           <table className="border-collapse text-xs min-w-full">
@@ -367,6 +465,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                 {days.map(d => (
                   <th
                     key={d}
+                    data-day-col={d}
                     ref={d === todayKey ? todayColRef : undefined}
                     className={clsx(
                       'px-1.5 py-2 border-b border-gray-100 font-semibold text-center min-w-[52px]',
@@ -409,6 +508,19 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                           >
                             {status ? STATUS_STYLE[status].label : '−'}
                           </button>
+                          {isPhysical && status === 'presente' && (
+                            <select
+                              value={getPSE(player.id, d) ?? ''}
+                              onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}
+                              className="mt-1 w-9 h-6 text-[10px] rounded-md border border-gray-200 text-center text-gray-600 bg-white"
+                              title="PSE (Percepción Subjetiva del Esfuerzo)"
+                            >
+                              <option value="">PSE</option>
+                              {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                                <option key={n} value={n}>{n}</option>
+                              ))}
+                            </select>
+                          )}
                           {isOpen && (
                             <div className="absolute z-20 top-full mt-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-1 flex gap-1">
                               {(['presente', 'ausente', 'lesionado'] as AttendanceStatus[]).map(opt => (
