@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Check, Shield } from 'lucide-react'
-import { signUpWithUsername, supabase } from '@/lib/supabase'
+import { signUpWithUsername, supabase, findCoachByCategory, createTrainerLink } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { TEAM_CATEGORIES, AVATAR_COLORS } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
@@ -18,6 +18,7 @@ interface RegForm {
 export function RegisterPage() {
   const navigate = useNavigate()
   const { setProfile, account } = useAppStore()
+  const [profileKind, setProfileKind] = useState<'coach' | 'preparador_fisico'>('coach')
   const [selectedCats, setSelectedCats] = useState<TeamCategory[]>([])
   const [serverError, setServerError] = useState<string | null>(null)
   const [showAdminCode, setShowAdminCode] = useState(false)
@@ -35,8 +36,8 @@ export function RegisterPage() {
     if (selectedCats.length === 0) { setServerError('Seleccioná al menos una categoría.'); return }
     setServerError(null)
 
-    const isAdmin = admin_code?.trim() === ADMIN_CODE
-    const role = isAdmin ? 'admin' : 'coach'
+    const isAdmin = profileKind === 'coach' && admin_code?.trim() === ADMIN_CODE
+    const role = isAdmin ? 'admin' : profileKind
 
     // El patrón de credenciales se deriva del access_code de la cuenta, así cada cuenta nueva
     // tiene el suyo propio automáticamente. Para Defensa y Justicia se mantiene EXACTAMENTE
@@ -58,9 +59,30 @@ export function RegisterPage() {
       return
     }
 
-    await supabase.from('profiles')
-      .update({ categories: selectedCats, avatar_color: avatarColor, role, account_id: account.id })
-      .eq('id', data.user.id)
+    if (profileKind === 'preparador_fisico') {
+      // No se guardan "categories" propias — en cambio, se crea un vínculo por cada
+      // categoría elegida, hacia el coach que hoy la tiene asignada (si existe).
+      await supabase.from('profiles')
+        .update({ categories: [], avatar_color: avatarColor, role, account_id: account.id })
+        .eq('id', data.user.id)
+
+      const notFound: string[] = []
+      for (const cat of selectedCats) {
+        const { data: coach } = await findCoachByCategory(account.id, cat)
+        if (coach) {
+          await createTrainerLink(data.user.id, coach.id, cat)
+        } else {
+          notFound.push(cat)
+        }
+      }
+      if (notFound.length > 0) {
+        setServerError(`Perfil creado, pero estas categorías no tienen entrenador asignado todavía: ${notFound.join(', ')}.`)
+      }
+    } else {
+      await supabase.from('profiles')
+        .update({ categories: selectedCats, avatar_color: avatarColor, role, account_id: account.id })
+        .eq('id', data.user.id)
+    }
 
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
     if (profile) { setProfile(profile); navigate(isAdmin ? '/admin' : '/categoria') }
@@ -89,6 +111,28 @@ export function RegisterPage() {
           <div className="h-1.5" style={{ background: `linear-gradient(to right, ${color}, ${color}aa, ${color})` }}/>
           <div className="p-6">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Tipo de perfil */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProfileKind('coach')}
+                  className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
+                    profileKind === 'coach' ? 'bg-neutral2-700 border-neutral2-700 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-neutral2-400'
+                  }`}
+                >
+                  Soy entrenador
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileKind('preparador_fisico')}
+                  className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
+                    profileKind === 'preparador_fisico' ? 'bg-neutral2-700 border-neutral2-700 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-neutral2-400'
+                  }`}
+                >
+                  Soy preparador físico
+                </button>
+              </div>
+
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Nombre completo</label>
                 <input placeholder="Ej: Emanuel García"
@@ -111,7 +155,11 @@ export function RegisterPage() {
               {/* Categorías */}
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-2">
-                  Mis categorías <span className="text-gray-400 font-normal">(seleccioná las tuyas)</span>
+                  {profileKind === 'preparador_fisico' ? (
+                    <>Categorías a las que me vinculo <span className="text-gray-400 font-normal">(elegí con cuáles trabajás)</span></>
+                  ) : (
+                    <>Mis categorías <span className="text-gray-400 font-normal">(seleccioná las tuyas)</span></>
+                  )}
                 </label>
                 <div className="space-y-2">
                   {baseCats.map(base => (
@@ -138,21 +186,23 @@ export function RegisterPage() {
                 )}
               </div>
 
-              {/* Código admin (opcional) */}
-              <div>
-                <button type="button" onClick={() => setShowAdminCode(!showAdminCode)}
-                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                  <Shield size={12}/>
-                  {showAdminCode ? 'Ocultar código de administrador' : '¿Sos administrador?'}
-                </button>
-                {showAdminCode && (
-                  <div className="mt-2">
-                    <input type="password" placeholder="Código de administrador"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
-                      {...register('admin_code')}/>
-                  </div>
-                )}
-              </div>
+              {/* Código admin (opcional, solo para entrenadores) */}
+              {profileKind === 'coach' && (
+                <div>
+                  <button type="button" onClick={() => setShowAdminCode(!showAdminCode)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                    <Shield size={12}/>
+                    {showAdminCode ? 'Ocultar código de administrador' : '¿Sos administrador?'}
+                  </button>
+                  {showAdminCode && (
+                    <div className="mt-2">
+                      <input type="password" placeholder="Código de administrador"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
+                        {...register('admin_code')}/>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {serverError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2.5 rounded-xl">{serverError}</div>
