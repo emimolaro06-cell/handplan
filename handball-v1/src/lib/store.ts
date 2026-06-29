@@ -26,6 +26,12 @@ interface AppState {
   effectiveCategories: TeamCategory[]
   setEffectiveCategories: (cats: TeamCategory[]) => void
 
+  // Para un Preparador Físico: lista de sus vínculos (categoría + coach al que pertenece esa
+  // categoría). Se usa en CategoryPage en vez de profile.categories, ya que el preparador no
+  // tiene categorías propias — eligió categorías de otros coaches al registrarse.
+  trainerLinkOptions: { category: TeamCategory; coachId: string; coachName: string }[]
+  setTrainerLinkOptions: (opts: { category: TeamCategory; coachId: string; coachName: string }[]) => void
+
   selectedCategory: TeamCategory | null
   setSelectedCategory: (c: TeamCategory | null) => void
 
@@ -48,6 +54,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   effectiveCategories: [],
   setEffectiveCategories: (effectiveCategories) => set({ effectiveCategories }),
+
+  trainerLinkOptions: [],
+  setTrainerLinkOptions: (trainerLinkOptions) => set({ trainerLinkOptions }),
 
   selectedCategory: null,
   setSelectedCategory: (selectedCategory) => set({ selectedCategory }),
