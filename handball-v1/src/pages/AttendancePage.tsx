@@ -40,6 +40,7 @@ export function AttendancePage() {
 
   const [showAddTurno, setShowAddTurno] = useState(false)
   const [newTurnoName, setNewTurnoName] = useState('')
+  const [pseVersion, setPseVersion] = useState(0)
 
   const allTurnos = [...ATTENDANCE_FIXED_SHIFTS, ...extraTurnos]
 
@@ -142,10 +143,11 @@ export function AttendancePage() {
             setRefMonth={setRefMonth}
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
+            onPSEChange={() => setPseVersion(v => v + 1)}
           />
 
           {activeTurno === 'Preparación física' && (
-            <PSEChart players={players} refMonth={refMonth}/>
+            <PSEChart players={players} refMonth={refMonth} refreshKey={pseVersion}/>
           )}
 
           <CombinedSummary players={players} refMonth={refMonth} allTurnos={allTurnos}/>
@@ -220,7 +222,7 @@ export function AttendancePage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE UN TURNO — jugadores × días del mes
 // ════════════════════════════════════════════════════════════════════════════
-function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast }: {
+function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onPSEChange }: {
   players: Player[]
   turno: string
   category: string
@@ -229,6 +231,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
   setRefMonth: (updater: (d: Date) => Date) => void
   onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
+  onPSEChange: () => void
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -343,6 +346,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
         // El PSE solo tiene sentido con Presente — si cambia a otro estado, se limpia.
         if (status !== 'presente') {
           await setAttendancePSE(playerId, date, turno, null).catch(() => {})
+          if (isPhysical) onPSEChange()
         }
         setRecords(prev => {
           const existing = prev.find(r => r.player_id === playerId && r.date === date)
@@ -364,6 +368,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     try {
       await setAttendancePSE(playerId, date, turno, pse)
       setRecords(prev => prev.map(r => (r.player_id === playerId && r.date === date ? { ...r, pse } : r)))
+      onPSEChange()
     } catch {
       onToast({ msg: 'Error al guardar el PSE.', type: 'error' })
     }
@@ -578,8 +583,8 @@ function pseColor(value: number): string {
   return '#e34948'
 }
 
-function PSEChart({ players, refMonth }: {
-  players: Player[]; refMonth: Date
+function PSEChart({ players, refMonth, refreshKey }: {
+  players: Player[]; refMonth: Date; refreshKey: number
 }) {
   const [selected, setSelected] = useState<string>('__team__')
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -593,7 +598,7 @@ function PSEChart({ players, refMonth }: {
     getAttendanceInRange(playerIds, start, end)
       .then(all => setRecords(all.filter(r => r.turno === 'Preparación física')))
       .finally(() => setLoading(false))
-  }, [playerIds.join(','), start, end])
+  }, [playerIds.join(','), start, end, refreshKey])
 
   const relevant = useMemo(
     () => records.filter(r => r.status === 'presente' && r.pse != null && (selected === '__team__' || r.player_id === selected)),
