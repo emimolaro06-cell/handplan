@@ -103,6 +103,17 @@ export async function clearAttendanceStatus(playerId: string, date: string, turn
   if (error) throw error
 }
 
+// Borra TODOS los registros (de cualquier jugador) de una fecha+turno puntual —
+// usado para "borrar el día completo" en Preparación física, cuando se cargó por error.
+export async function clearAttendanceDay(date: string, turno: string): Promise<void> {
+  const { error } = await supabase
+    .from('attendance')
+    .delete()
+    .eq('date', date)
+    .eq('turno', turno)
+  if (error) throw error
+}
+
 // Lista los turnos puntuales (no fijos) que ya tienen al menos un registro en el rango dado
 // — para mostrar columnas extra que el coach haya agregado en el mes
 export async function listExtraTurnosInRange(
