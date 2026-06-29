@@ -1,13 +1,36 @@
 import { useEffect, useState } from 'react'
-import { supabase, getProfile } from '@/lib/supabase'
+import { supabase, getProfile, getTrainerLinks } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { getAccountById } from '@/lib/accounts'
+import type { TeamCategory } from '@/types'
 
 // Resuelve, para el usuario logueado, qué user_id debe usarse para leer/escribir datos:
-// - Si NO es un Ayudante Técnico vinculado: su propio id (caso normal, coach trabajando con lo suyo).
-// - Si SÍ es un AT vinculado a un coach: el id del coach (así opera sobre los mismos datos).
-// También devuelve las categorías de equipo a mostrar (las del coach, si es un AT).
-async function resolveEffectiveUser(userId: string, ownCategories: string[]) {
+// - Coach normal (sin AT): su propio id.
+// - Ayudante Técnico vinculado a un coach: el id del coach (opera sobre los mismos datos).
+// - Preparador Físico: NO se resuelve un único effectiveUserId acá — tiene potencialmente
+//   varios vínculos (uno por categoría/coach). Se devuelven sus opciones en trainerLinkOptions,
+//   y CategoryPage se encarga de fijar el effectiveUserId según cuál elija el usuario.
+async function resolveEffectiveUser(userId: string, role: string, ownCategories: string[]) {
+  if (role === 'preparador_fisico') {
+    const links = await getTrainerLinks(userId)
+    const options = await Promise.all(
+      links.map(async (link) => {
+        const { data: coachProfile } = await getProfile(link.coach_id)
+        return {
+          category: link.team_category as TeamCategory,
+          coachId: link.coach_id,
+          coachName: coachProfile?.full_name ?? '',
+        }
+      })
+    )
+    return {
+      effectiveUserId: null as string | null,
+      assistantOfCoachName: null as string | null,
+      effectiveCategories: [] as TeamCategory[],
+      trainerLinkOptions: options,
+    }
+  }
+
   const { data: link } = await supabase
     .from('assistant_links')
     .select('coach_id')
@@ -18,7 +41,8 @@ async function resolveEffectiveUser(userId: string, ownCategories: string[]) {
     return {
       effectiveUserId: userId,
       assistantOfCoachName: null as string | null,
-      effectiveCategories: ownCategories,
+      effectiveCategories: ownCategories as TeamCategory[],
+      trainerLinkOptions: [],
     }
   }
 
@@ -26,25 +50,27 @@ async function resolveEffectiveUser(userId: string, ownCategories: string[]) {
   return {
     effectiveUserId: link.coach_id,
     assistantOfCoachName: coachProfile?.full_name ?? null,
-    effectiveCategories: coachProfile?.categories ?? [],
+    effectiveCategories: (coachProfile?.categories ?? []) as TeamCategory[],
+    trainerLinkOptions: [],
   }
 }
 
 export function useAuth() {
   const {
     profile, setProfile, account, setAccount,
-    setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories,
+    setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setTrainerLinkOptions,
   } = useAppStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function applyProfile(userId: string, data: any) {
       setProfile(data)
-      const { effectiveUserId, assistantOfCoachName, effectiveCategories } =
-        await resolveEffectiveUser(userId, data.categories ?? [])
+      const { effectiveUserId, assistantOfCoachName, effectiveCategories, trainerLinkOptions } =
+        await resolveEffectiveUser(userId, data.role, data.categories ?? [])
       setEffectiveUserId(effectiveUserId)
       setAssistantOfCoachName(assistantOfCoachName)
       setEffectiveCategories(effectiveCategories)
+      setTrainerLinkOptions(trainerLinkOptions)
 
       // Si todavía no hay una Cuenta reconocida en el store (ej: el usuario entró
       // directo con sesión guardada, sin pasar por la pantalla de código), la resolvemos
@@ -75,12 +101,13 @@ export function useAuth() {
           setEffectiveUserId(null)
           setAssistantOfCoachName(null)
           setEffectiveCategories([])
+          setTrainerLinkOptions([])
         }
       }
     )
     return () => subscription.unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setAccount])
+  }, [setProfile, setEffectiveUserId, setAssistantOfCoachName, setEffectiveCategories, setTrainerLinkOptions, setAccount])
 
   return { profile, loading }
 }
