@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Search, Trash2, Dumbbell, X, Upload, PenTool, Settings } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useAppStore } from '@/lib/store'
-import { getExercises, createExercise, deleteExercise, uploadImage } from '@/lib/supabase'
+import { getExercises, createExercise, updateExercise, deleteExercise, uploadImage } from '@/lib/supabase'
 import { getExerciseCategories, addExerciseCategory, deleteExerciseCategory } from '@/lib/exerciseCategories'
 import { Card, Button, Input, Textarea, Spinner, Empty, Toast, Badge, Modal } from '@/components/ui/index'
 import { TacticalBoard } from '@/components/training/TacticalBoard'
@@ -34,8 +34,17 @@ export function ExercisesPage() {
   const [showBoard, setShowBoard] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
+  const [viewing, setViewing] = useState<Exercise | null>(null)
+  const [editing, setEditing] = useState(false)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ExForm>()
+  const {
+    register: registerEdit, handleSubmit: handleSubmitEdit, reset: resetEdit,
+    formState: { errors: errorsEdit },
+  } = useForm<ExForm>()
+  const [editImgFile, setEditImgFile] = useState<File | null>(null)
+  const [editImgPrev, setEditImgPrev] = useState<string | null>(null)
+  const [editShowBoard, setEditShowBoard] = useState(false)
 
   function load(cat?: string) {
     setLoading(true)
@@ -80,6 +89,65 @@ export function ExercisesPage() {
     await deleteExercise(id)
     setExercises(p => p.filter(e => e.id !== id))
     setToast({ msg: 'Ejercicio eliminado.', type: 'success' })
+  }
+
+  function openExercise(ex: Exercise) {
+    setViewing(ex)
+    setEditing(false)
+  }
+
+  function startEditing() {
+    if (!viewing) return
+    resetEdit({
+      name: viewing.name,
+      category: viewing.category,
+      description: viewing.description ?? '',
+      objectives: viewing.objectives ?? '',
+      recommended_age: viewing.recommended_age ?? '',
+    })
+    setEditImgFile(null)
+    setEditImgPrev(viewing.image_url ?? null)
+    setEditing(true)
+  }
+
+  function closeModal() {
+    setViewing(null)
+    setEditing(false)
+    setEditImgFile(null)
+    setEditImgPrev(null)
+  }
+
+  function handleEditImg(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return
+    setEditImgFile(f); setEditImgPrev(URL.createObjectURL(f))
+  }
+
+  async function handleEditBoardSave(dataUrl: string) {
+    setEditShowBoard(false)
+    const res = await fetch(dataUrl)
+    const blob = await res.blob()
+    const file = new File([blob], `pizarra-${Date.now()}.png`, { type: 'image/png' })
+    setEditImgFile(file)
+    setEditImgPrev(dataUrl)
+  }
+
+  async function onSubmitEdit(data: ExForm) {
+    if (!viewing) return
+    setSubmitting(true)
+    let image_url = viewing.image_url
+    if (editImgFile) {
+      const { url } = await uploadImage('exercises', editImgFile)
+      image_url = url
+    } else if (editImgPrev === null) {
+      image_url = null
+    }
+    const { data: updated, error } = await updateExercise(viewing.id, { ...data, image_url })
+    setSubmitting(false)
+    if (error || !updated) { setToast({ msg: 'Error al guardar los cambios.', type: 'error' }); return }
+    setExercises(p => p.map(e => (e.id === viewing.id ? (updated as Exercise) : e)))
+    setViewing(updated as Exercise)
+    setEditing(false)
+    setToast({ msg: 'Ejercicio actualizado.', type: 'success' })
   }
 
   function handleImg(e: React.ChangeEvent<HTMLInputElement>) {
@@ -151,7 +219,7 @@ export function ExercisesPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Categoría</label>
                 <select
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-dj-400"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-neutral2-400"
                   {...register('category', { required: 'Obligatorio' })}
                 >
                   <option value="">Seleccioná...</option>
@@ -195,14 +263,14 @@ export function ExercisesPage() {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <label className="cursor-pointer inline-flex items-center gap-2 border border-dashed border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-500 hover:border-dj-400 hover:text-dj-600 transition-colors">
+                  <label className="cursor-pointer inline-flex items-center gap-2 border border-dashed border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-500 hover:border-neutral2-400 hover:text-neutral2-600 transition-colors">
                     <Upload size={16}/> Subir imagen
                     <input type="file" accept="image/*" className="hidden" onChange={handleImg}/>
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowBoard(true)}
-                    className="inline-flex items-center gap-2 border border-dashed border-dj-200 rounded-xl px-4 py-3 text-sm text-dj-500 hover:border-dj-500 hover:text-dj-600 transition-colors bg-dj-50/30"
+                    className="inline-flex items-center gap-2 border border-dashed border-neutral2-200 rounded-xl px-4 py-3 text-sm text-neutral2-500 hover:border-neutral2-500 hover:text-neutral2-600 transition-colors bg-neutral2-50/30"
                   >
                     <PenTool size={16}/> Pizarra táctica
                   </button>
@@ -226,13 +294,13 @@ export function ExercisesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar ejercicio..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
           />
         </div>
         <select
           value={filterCat}
           onChange={e => setFilterCat(e.target.value)}
-          className="sm:w-52 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-dj-400"
+          className="sm:w-52 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-neutral2-400"
         >
           {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -252,20 +320,27 @@ export function ExercisesPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(e => (
-            <Card key={e.id} padded={false} className="flex flex-col overflow-hidden">
+            <Card
+              key={e.id} padded={false}
+              className="flex flex-col overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => openExercise(e)}
+            >
               {e.image_url && (
                 <img src={e.image_url} alt={e.name} className="w-full h-36 object-cover"/>
               )}
               <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <p className="font-semibold text-gray-900 text-sm leading-snug">{e.name}</p>
-                  <button onClick={() => handleDelete(e.id)} className="text-gray-300 hover:text-red-500 flex-shrink-0 transition-colors">
+                  <button
+                    onClick={ev => { ev.stopPropagation(); handleDelete(e.id) }}
+                    className="text-gray-300 hover:text-red-500 flex-shrink-0 transition-colors"
+                  >
                     <Trash2 size={14}/>
                   </button>
                 </div>
                 <Badge color="gray" className="self-start mb-2">{e.category}</Badge>
                 {e.description && <p className="text-xs text-gray-500 line-clamp-2">{e.description}</p>}
-                {e.objectives && <p className="text-xs text-dj-700 mt-1.5 line-clamp-1">Obj: {e.objectives}</p>}
+                {e.objectives && <p className="text-xs text-neutral2-700 mt-1.5 line-clamp-1">Obj: {e.objectives}</p>}
                 {e.recommended_age && <p className="text-xs text-gray-400 mt-1">Edad: {e.recommended_age}</p>}
               </div>
             </Card>
@@ -282,6 +357,116 @@ export function ExercisesPage() {
         />
       )}
 
+      {/* Pizarra táctica del modal de edición */}
+      {editShowBoard && (
+        <TacticalBoard
+          onSave={handleEditBoardSave}
+          onClose={() => setEditShowBoard(false)}
+          initialImage={null}
+        />
+      )}
+
+      {/* Modal: ver / editar ejercicio */}
+      <Modal
+        open={!!viewing}
+        onClose={closeModal}
+        title={editing ? 'Editar ejercicio' : viewing?.name}
+        maxWidth="max-w-xl"
+      >
+        {viewing && !editing && (
+          <div className="space-y-4">
+            {viewing.image_url && (
+              <img src={viewing.image_url} alt={viewing.name} className="w-full max-h-72 object-contain rounded-xl bg-gray-50"/>
+            )}
+            <Badge color="gray">{viewing.category}</Badge>
+            {viewing.description && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">Descripción</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewing.description}</p>
+              </div>
+            )}
+            {viewing.objectives && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">Objetivos</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewing.objectives}</p>
+              </div>
+            )}
+            {viewing.recommended_age && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">Edad recomendada</p>
+                <p className="text-sm text-gray-700">{viewing.recommended_age}</p>
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button onClick={startEditing}>Editar</Button>
+              <Button variant="ghost" onClick={closeModal}>Cerrar</Button>
+            </div>
+          </div>
+        )}
+
+        {viewing && editing && (
+          <form onSubmit={handleSubmitEdit(onSubmitEdit)} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Nombre"
+                error={errorsEdit.name?.message}
+                {...registerEdit('name', { required: 'Obligatorio' })}
+              />
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Categoría</label>
+                <select
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-neutral2-400"
+                  {...registerEdit('category', { required: 'Obligatorio' })}
+                >
+                  <option value="">Seleccioná...</option>
+                  {categories.map(c => <option key={c.id} value={c.category}>{c.category}</option>)}
+                </select>
+                {errorsEdit.category && <p className="text-xs text-red-600">{errorsEdit.category.message}</p>}
+              </div>
+              <Input label="Edad recomendada" {...registerEdit('recommended_age')}/>
+              <div/>
+              <div className="sm:col-span-2">
+                <Textarea label="Descripción" rows={3} {...registerEdit('description')}/>
+              </div>
+              <div className="sm:col-span-2">
+                <Textarea label="Objetivos" rows={2} {...registerEdit('objectives')}/>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Imagen (opcional)</p>
+              {editImgPrev ? (
+                <div className="relative w-44 h-32 rounded-xl overflow-hidden border border-gray-100">
+                  <img src={editImgPrev} alt="" className="w-full h-full object-cover"/>
+                  <button type="button" onClick={() => { setEditImgFile(null); setEditImgPrev(null) }}
+                    className="absolute top-1.5 right-1.5 bg-white/90 text-red-500 rounded-lg p-1"
+                  ><X size={12}/></button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-2 border border-dashed border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-500 hover:border-neutral2-400 hover:text-neutral2-600 transition-colors">
+                    <Upload size={16}/> Subir imagen
+                    <input type="file" accept="image/*" className="hidden" onChange={handleEditImg}/>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEditShowBoard(true)}
+                    className="inline-flex items-center gap-2 border border-dashed border-neutral2-200 rounded-xl px-4 py-3 text-sm text-neutral2-500 hover:border-neutral2-500 hover:text-neutral2-600 transition-colors bg-neutral2-50/30"
+                  >
+                    <PenTool size={16}/> Pizarra táctica
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button type="submit" loading={submitting}>Guardar cambios</Button>
+              <Button type="button" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       {/* Modal: gestionar categorías */}
       <Modal open={showCatMgr} onClose={() => setShowCatMgr(false)} title="Editar categorías de ejercicio">
         <div className="space-y-4">
@@ -291,7 +476,7 @@ export function ExercisesPage() {
               onChange={e => setNewCatLabel(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
               placeholder="Ej: Trabajo de pies"
-              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dj-400"
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral2-400"
             />
             <Button size="sm" onClick={handleAddCategory} icon={<Plus size={14}/>}>Agregar</Button>
           </div>
