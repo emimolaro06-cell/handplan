@@ -40,7 +40,8 @@ export function AttendancePage() {
 
   const [showAddTurno, setShowAddTurno] = useState(false)
   const [newTurnoName, setNewTurnoName] = useState('')
-  const [pseVersion, setPseVersion] = useState(0)
+  const [attendanceVersion, setAttendanceVersion] = useState(0)
+  const bumpVersion = () => setAttendanceVersion(v => v + 1)
 
   const allTurnos = [...ATTENDANCE_FIXED_SHIFTS, ...extraTurnos]
 
@@ -186,14 +187,14 @@ export function AttendancePage() {
             setRefMonth={setRefMonth}
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
-            onPSEChange={() => setPseVersion(v => v + 1)}
+            onPSEChange={bumpVersion}
           />
 
           {activeTurno === 'Preparación física' && (
-            <PSEChart players={players} refMonth={refMonth} refreshKey={pseVersion}/>
+            <PSEChart players={players} refMonth={refMonth} refreshKey={attendanceVersion}/>
           )}
 
-          <CombinedSummary players={players} refMonth={refMonth} allTurnos={allTurnos}/>
+          <CombinedSummary players={players} refMonth={refMonth} allTurnos={allTurnos} refreshKey={attendanceVersion}/>
         </>
       )}
 
@@ -389,6 +390,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
           return [...prev, { id: '', player_id: playerId, date, turno, status, pse: null, created_at: '' }]
         })
       }
+      onPSEChange() // refresca CombinedSummary y PSEChart en cualquier cambio de asistencia
     } catch {
       onToast({ msg: 'Error al guardar.', type: 'error' })
     }
@@ -747,8 +749,8 @@ function PSEChart({ players, refMonth, refreshKey }: {
   )
 }
 
-function CombinedSummary({ players, refMonth, allTurnos }: {
-  players: Player[]; refMonth: Date; allTurnos: string[]
+function CombinedSummary({ players, refMonth, allTurnos, refreshKey }: {
+  players: Player[]; refMonth: Date; allTurnos: string[]; refreshKey: number
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -761,7 +763,7 @@ function CombinedSummary({ players, refMonth, allTurnos }: {
       .then(setRecords)
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerIds.join(','), start, end])
+  }, [playerIds.join(','), start, end, refreshKey])
 
   const byTurno = allTurnos.map(t => {
     const recs = records.filter(r => r.turno === t && r.status !== 'lesionado')
