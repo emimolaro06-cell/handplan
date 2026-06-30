@@ -11,6 +11,7 @@ export function ClubCodePage() {
   const { profile, account, setAccount } = useAppStore()
   const [code, setCode] = useState('')
   const [error, setError] = useState(false)
+  const [pendingMsg, setPendingMsg] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkingStored, setCheckingStored] = useState(true)
 
@@ -22,7 +23,10 @@ export function ClubCodePage() {
     const storedId = localStorage.getItem(ACCOUNT_STORAGE_KEY)
     if (storedId && !account) {
       getAccountById(storedId)
-        .then(acc => { if (acc) setAccount(acc) })
+        .then(acc => {
+          if (acc && acc.status === 'active') setAccount(acc)
+          else localStorage.removeItem(ACCOUNT_STORAGE_KEY)
+        })
         .finally(() => setCheckingStored(false))
     } else {
       setCheckingStored(false)
@@ -34,9 +38,12 @@ export function ClubCodePage() {
     if (!code.trim()) return
     setLoading(true)
     setError(false)
+    setPendingMsg(false)
     try {
       const found = await findAccountByCode(code)
-      if (found) {
+      if (found && found.status === 'pending') {
+        setPendingMsg(true)
+      } else if (found) {
         localStorage.setItem(ACCOUNT_STORAGE_KEY, found.id)
         setAccount(found)
       } else {
@@ -81,15 +88,20 @@ export function ClubCodePage() {
                 <input
                   type="text"
                   value={code}
-                  onChange={e => { setCode(e.target.value); setError(false) }}
+                  onChange={e => { setCode(e.target.value); setError(false); setPendingMsg(false) }}
                   placeholder="Ingresá tu código"
                   className={`w-full rounded-xl border px-4 py-3 text-sm text-white text-center tracking-widest font-mono uppercase bg-black/40 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
-                    error ? 'border-red-500' : 'border-gray-700'
+                    error || pendingMsg ? 'border-amber-500' : 'border-gray-700'
                   }`}
                   autoFocus
                 />
                 {error && (
                   <p className="text-xs text-red-400 text-center">Código incorrecto. Intentá de nuevo.</p>
+                )}
+                {pendingMsg && (
+                  <p className="text-xs text-amber-400 text-center">
+                    Tu cuenta todavía está pendiente de aprobación. Te vamos a contactar pronto.
+                  </p>
                 )}
                 <button
                   type="submit"
