@@ -70,7 +70,7 @@ export default function App() {
         <Route path="/entrenamiento/:id" element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
         <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
-        <Route path="/pizarra"           element={<WithLayout><PlaybookPage/></WithLayout>}/>
+        <Route path="/pizarra"           element={<AuthGuard><AppLayout><PlaybookPage/></AppLayout></AuthGuard>}/>
         <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
         <Route path="/asistencia"        element={<WithLayout><AttendancePage/></WithLayout>}/>
         <Route path="/mi-ayudante"       element={<WithLayout><MyAssistantPage/></WithLayout>}/>
