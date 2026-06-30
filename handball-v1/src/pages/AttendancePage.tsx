@@ -378,7 +378,6 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
   }
 
   async function handleSetStatus(playerId: string, date: string, status: AttendanceStatus | null) {
-    setMenuFor(null)
     try {
       if (status === null) {
         await clearAttendanceStatus(playerId, date, turno)
