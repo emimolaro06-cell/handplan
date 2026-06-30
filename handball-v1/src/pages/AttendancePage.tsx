@@ -278,6 +278,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [menuFor, setMenuFor] = useState<{ playerId: string; date: string; x: number; y: number } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const todayColRef = useRef<HTMLTableCellElement>(null)
 
@@ -337,14 +338,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     : allMonthDays
 
   function handleAddDayClick() {
-    const todayKey = format(new Date(), 'yyyy-MM-dd')
-    if (days.includes(todayKey)) {
-      // Ya existe la columna de hoy — llevar el scroll directo ahí en vez de abrir el selector.
-      const el = document.querySelector(`[data-day-col="${todayKey}"]`)
-      el?.scrollIntoView({ block: 'nearest', inline: 'center' })
-      return
-    }
-    setNewDayValue(todayKey)
+    setNewDayValue(format(new Date(), 'yyyy-MM-dd'))
     setShowAddDay(true)
   }
 
@@ -571,15 +565,14 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                     </td>
                     {days.map(d => {
                       const status = getStatus(player.id, d)
-                      // Cicla: null → presente → ausente → lesionado → null
-                      // Evita el dropdown absoluto que queda recortado por overflow-x-auto
-                      const CYCLE: (AttendanceStatus | null)[] = ['presente', 'ausente', 'lesionado', null]
-                      const nextStatus = CYCLE[(CYCLE.indexOf(status) + 1) % CYCLE.length]
+                      const isOpen = menuFor?.playerId === player.id && menuFor?.date === d
                       return (
                         <td key={d} className={clsx('relative px-1 py-1 border-b border-gray-50 text-center', d === todayKey && 'bg-neutral2-50/40')}>
                           <button
-                            onClick={() => handleSetStatus(player.id, d, nextStatus)}
-                            title={nextStatus ? `Marcar ${nextStatus}` : 'Limpiar'}
+                            onClick={(e) => {
+                              const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                              setMenuFor(isOpen ? null : { playerId: player.id, date: d, x: rect.left + rect.width / 2, y: rect.bottom + 8 })
+                            }}
                             className={clsx(
                               'w-9 h-7 rounded-lg text-xs font-bold transition-colors',
                               status ? STATUS_STYLE[status].cls : 'bg-gray-50 text-gray-300 hover:bg-gray-100',
@@ -613,6 +606,41 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
           </table>
         </div>
       )}
+
+      {/* Dropdown de estado — renderizado fuera del overflow-x-auto con position:fixed */}
+      {menuFor && (() => {
+        const status = records.find(r => r.player_id === menuFor.playerId && r.date === menuFor.date)?.status ?? null
+        return (
+          <>
+            {/* Capa invisible para cerrar el menú al clickear afuera */}
+            <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
+            <div
+              className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-100 p-1 flex gap-1"
+              style={{ left: menuFor.x, top: menuFor.y, transform: 'translateX(-50%)' }}
+            >
+              {(['presente', 'ausente', 'lesionado'] as AttendanceStatus[]).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => { handleSetStatus(menuFor.playerId, menuFor.date, opt); setMenuFor(null) }}
+                  className={clsx('w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center', STATUS_STYLE[opt].cls)}
+                  title={opt}
+                >
+                  {STATUS_STYLE[opt].label}
+                </button>
+              ))}
+              {status && (
+                <button
+                  onClick={() => { handleSetStatus(menuFor.playerId, menuFor.date, null); setMenuFor(null) }}
+                  className="w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  title="Limpiar"
+                >
+                  <X size={13}/>
+                </button>
+              )}
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
