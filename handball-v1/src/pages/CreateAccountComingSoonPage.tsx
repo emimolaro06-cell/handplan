@@ -1,12 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Upload, CheckCircle2, Loader2, Sparkles } from 'lucide-react'
 import { createAccountRequest, isAccessCodeAvailable } from '@/lib/accounts'
 import { uploadImage } from '@/lib/supabase'
+import { extractDominantColors } from '@/lib/colorExtract'
 
 const COLOR_OPTIONS = [
-  '#1e8a1e', '#1d4ed8', '#7c3aed', '#b45309',
-  '#be185d', '#0f766e', '#c2410c', '#dc2626',
+  '#1e8a1e', '#166f16', '#3da83d',
+  '#1d4ed8', '#0ea5e9', '#0f766e',
+  '#7c3aed', '#9333ea', '#be185d', '#db2777',
+  '#b45309', '#d97706', '#c2410c',
+  '#dc2626', '#ef4444',
+  '#475569', '#1e293b',
 ]
 
 export function CreateAccountComingSoonPage() {
@@ -20,16 +25,26 @@ export function CreateAccountComingSoonPage() {
   const [color, setColor] = useState(COLOR_OPTIONS[0])
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPrev, setLogoPrev] = useState<string | null>(null)
+  const [detectedColors, setDetectedColors] = useState<string[]>([])
+  const [extractingColors, setExtractingColors] = useState(false)
 
   const [adminName, setAdminName] = useState('')
   const [adminUsername, setAdminUsername] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
     setLogoFile(f)
     setLogoPrev(URL.createObjectURL(f))
+    setExtractingColors(true)
+    try {
+      const colors = await extractDominantColors(f, 4)
+      setDetectedColors(colors)
+      if (colors.length > 0) setColor(colors[0])
+    } finally {
+      setExtractingColors(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -140,7 +155,49 @@ export function CreateAccountComingSoonPage() {
                   <p className="text-xs text-gray-500 mt-1">Es el código que van a usar tus entrenadores para entrar.</p>
                 </div>
                 <div>
+                  <label className="text-sm text-gray-300 block mb-2">Logo (opcional)</label>
+                  {logoPrev ? (
+                    <div className="flex items-center gap-3">
+                      <img src={logoPrev} alt="" className="w-14 h-14 rounded-xl object-cover border border-gray-700"/>
+                      <button type="button" onClick={() => { setLogoFile(null); setLogoPrev(null); setDetectedColors([]) }} className="text-xs text-red-400 hover:text-red-300">
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer inline-flex items-center gap-2 border border-dashed border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-400 hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                      <Upload size={15}/> Subir logo
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange}/>
+                    </label>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Si no subís uno, se usa el logo de HandPlan mientras tanto.</p>
+                </div>
+                <div>
                   <label className="text-sm text-gray-300 block mb-2">Color principal</label>
+                  {(extractingColors || detectedColors.length > 0) && (
+                    <div className="mb-3">
+                      <p className="text-xs text-emerald-400 flex items-center gap-1.5 mb-2">
+                        <Sparkles size={12}/>
+                        {extractingColors ? 'Analizando colores del logo...' : 'Detectados en tu logo'}
+                      </p>
+                      <div className="flex gap-2 flex-wrap">
+                        {extractingColors ? (
+                          <Loader2 size={20} className="animate-spin text-gray-500"/>
+                        ) : (
+                          detectedColors.map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setColor(c)}
+                              className="w-9 h-9 rounded-full border-2 transition-transform"
+                              style={{ backgroundColor: c, borderColor: color === c ? '#fff' : 'transparent', transform: color === c ? 'scale(1.15)' : 'scale(1)' }}
+                              title={c}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mb-2">{detectedColors.length > 0 ? 'O elegí uno de la paleta' : 'Paleta'}</p>
                   <div className="flex gap-2 flex-wrap">
                     {COLOR_OPTIONS.map(c => (
                       <button
@@ -152,23 +209,6 @@ export function CreateAccountComingSoonPage() {
                       />
                     ))}
                   </div>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-300 block mb-2">Logo (opcional)</label>
-                  {logoPrev ? (
-                    <div className="flex items-center gap-3">
-                      <img src={logoPrev} alt="" className="w-14 h-14 rounded-xl object-cover border border-gray-700"/>
-                      <button type="button" onClick={() => { setLogoFile(null); setLogoPrev(null) }} className="text-xs text-red-400 hover:text-red-300">
-                        Quitar
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer inline-flex items-center gap-2 border border-dashed border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-400 hover:border-emerald-500 hover:text-emerald-400 transition-colors">
-                      <Upload size={15}/> Subir logo
-                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange}/>
-                    </label>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">Si no subís uno, se usa el logo de HandPlan mientras tanto.</p>
                 </div>
               </div>
             </div>
