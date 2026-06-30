@@ -18,6 +18,7 @@ import { SharedMicrocyclePage }  from '@/pages/SharedMicrocyclePage'
 import { AttendancePage }        from '@/pages/AttendancePage'
 import { MyAssistantPage }       from '@/pages/MyAssistantPage'
 import { CreateAccountComingSoonPage } from '@/pages/CreateAccountComingSoonPage'
+import { ApproveAccountPage }    from '@/pages/ApproveAccountPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
         {/* Públicas */}
         <Route path="/"          element={<ClubCodePage/>}/>
         <Route path="/crear-cuenta" element={<CreateAccountComingSoonPage/>}/>
+        <Route path="/admin/aprobar" element={<ApproveAccountPage/>}/>
         <Route path="/registro"  element={<RegisterPage/>}/>
         <Route path="/perfiles"  element={<ProfilesPage/>}/>
         <Route path="/compartido/:token" element={<SharedSessionPage/>}/>
