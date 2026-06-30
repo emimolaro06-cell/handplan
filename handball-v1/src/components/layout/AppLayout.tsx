@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, BookOpen, Dumbbell,
-  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck, Users,
+  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck, Users, Layers,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/crear',         icon: PlusCircle,      label: 'Crear entrenamiento' },
   { to: '/biblioteca',    icon: BookOpen,         label: 'Biblioteca' },
   { to: '/ejercicios',    icon: Dumbbell,         label: 'Ejercicios' },
+  { to: '/pizarra',       icon: Layers,           label: 'Pizarra' },
   { to: '/planificacion', icon: CalendarDays,     label: 'Planificación mensual' },
   { to: '/asistencia',    icon: UserCheck,        label: 'Asistencia' },
 ]
