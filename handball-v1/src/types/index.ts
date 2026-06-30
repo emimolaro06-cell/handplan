@@ -212,5 +212,6 @@ export interface Account {
   logo_url: string | null
   primary_color: string
   admin_id: string | null
+  status: 'active' | 'pending'
   created_at: string
 }
