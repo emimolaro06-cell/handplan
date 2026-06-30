@@ -278,7 +278,6 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [menuFor, setMenuFor] = useState<{ playerId: string; date: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const todayColRef = useRef<HTMLTableCellElement>(null)
 
@@ -573,11 +572,15 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                     </td>
                     {days.map(d => {
                       const status = getStatus(player.id, d)
-                      const isOpen = menuFor?.playerId === player.id && menuFor?.date === d
+                      // Cicla: null → presente → ausente → lesionado → null
+                      // Evita el dropdown absoluto que queda recortado por overflow-x-auto
+                      const CYCLE: (AttendanceStatus | null)[] = ['presente', 'ausente', 'lesionado', null]
+                      const nextStatus = CYCLE[(CYCLE.indexOf(status) + 1) % CYCLE.length]
                       return (
                         <td key={d} className={clsx('relative px-1 py-1 border-b border-gray-50 text-center', d === todayKey && 'bg-neutral2-50/40')}>
                           <button
-                            onClick={() => setMenuFor(isOpen ? null : { playerId: player.id, date: d })}
+                            onClick={() => handleSetStatus(player.id, d, nextStatus)}
+                            title={nextStatus ? `Marcar ${nextStatus}` : 'Limpiar'}
                             className={clsx(
                               'w-9 h-7 rounded-lg text-xs font-bold transition-colors',
                               status ? STATUS_STYLE[status].cls : 'bg-gray-50 text-gray-300 hover:bg-gray-100',
@@ -597,27 +600,6 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                                 <option key={n} value={n}>{n}</option>
                               ))}
                             </select>
-                          )}
-                          {isOpen && (
-                            <div className="absolute z-20 top-full mt-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-1 flex gap-1">
-                              {(['presente', 'ausente', 'lesionado'] as AttendanceStatus[]).map(opt => (
-                                <button
-                                  key={opt}
-                                  onClick={() => handleSetStatus(player.id, d, opt)}
-                                  className={clsx('w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center', STATUS_STYLE[opt].cls)}
-                                  title={opt}
-                                >
-                                  {STATUS_STYLE[opt].label}
-                                </button>
-                              ))}
-                              <button
-                                onClick={() => handleSetStatus(player.id, d, null)}
-                                className="w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center bg-gray-50 text-gray-400 hover:bg-gray-100"
-                                title="Limpiar"
-                              >
-                                <X size={13}/>
-                              </button>
-                            </div>
                           )}
                         </td>
                       )
