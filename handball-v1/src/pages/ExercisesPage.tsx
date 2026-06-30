@@ -368,7 +368,7 @@ export function ExercisesPage() {
 
       {/* Modal: ver / editar ejercicio */}
       <Modal
-        open={!!viewing}
+        open={!!viewing && !editShowBoard}
         onClose={closeModal}
         title={editing ? 'Editar ejercicio' : viewing?.name}
         maxWidth="max-w-xl"
