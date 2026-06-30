@@ -198,6 +198,10 @@ export async function createExercise(data: Record<string, unknown>) {
   return supabase.from('exercises').insert(data).select().single()
 }
 
+export async function updateExercise(id: string, data: Record<string, unknown>) {
+  return supabase.from('exercises').update(data).eq('id', id).select().single()
+}
+
 export async function deleteExercise(id: string) {
   return supabase.from('exercises').delete().eq('id', id)
 }
