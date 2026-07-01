@@ -645,7 +645,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                           >
                             {status ? STATUS_STYLE[status].label : '−'}
                           </button>
-                          {(isPhysical || turno === 'Pelota') && status === 'presente' && (
+                          {isPhysical && status === 'presente' && (
                             <select
                               value={getPSE(player.id, d) ?? ''}
                               onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}

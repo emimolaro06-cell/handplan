@@ -461,7 +461,7 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GRÁFICO DE sRPE SEMANAL (Carga de entrenamiento)
+// GRÁFICO DE sRPE DIARIO (barras por día, agrupadas por semana)
 // ════════════════════════════════════════════════════════════════════════════
 function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
   const [selected, setSelected] = useState('__team__')
@@ -480,35 +480,48 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
   const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
   const allDates = useMemo(() => Array.from(new Set(fisicoRecords.map(r => r.date))).sort(), [fisicoRecords])
 
-  const weeklyData = useMemo(() => {
-    const buckets = new Map<string, { sum: number; count: number; weekStart: Date }>()
-    allDates.forEach(date => {
-      relevantPlayers.forEach(player => {
-        const { srpe } = computeSRPE(player.id, date, fisicoRecords, pelotaRecords)
-        if (srpe === 0) return
-        const day = new Date(date + 'T12:00:00')
-        const ws = startOfWeek(day, { weekStartsOn: 1 })
-        const key = format(ws, 'yyyy-MM-dd')
-        const b = buckets.get(key) ?? { sum: 0, count: 0, weekStart: ws }
-        b.sum += srpe; b.count += 1; buckets.set(key, b)
-      })
+  // Barras diarias con separador de semana
+  const dailyData = useMemo(() => {
+    return allDates.map(date => {
+      const srpes = relevantPlayers
+        .map(p => computeSRPE(p.id, date, fisicoRecords, pelotaRecords).srpe)
+        .filter(v => v > 0)
+      const avg = srpes.length > 0 ? Math.round(srpes.reduce((a, b) => a + b, 0) / srpes.length) : 0
+      const day = new Date(date + 'T12:00:00')
+      const weekNum = Math.ceil((day.getDate() + startOfWeek(day, { weekStartsOn: 1 }).getDay()) / 7)
+      return {
+        date,
+        label: format(day, 'd/MM'),
+        fullLabel: format(day, "EEEE d 'de' MMMM", { locale: es }),
+        value: avg,
+        weekNum,
+        color: avg === 0 ? '#e5e7eb'
+          : avg < 400 ? '#639922'
+          : avg < 700 ? '#f59e0b'
+          : avg < 900 ? '#f97316'
+          : '#e34948',
+      }
     })
-    return Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b))
-      .map(([, b], i) => ({
-        label: `Sem ${i + 1}`,
-        fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
-        value: Math.round(b.sum / b.count),
-      }))
   }, [allDates, relevantPlayers, fisicoRecords, pelotaRecords])
 
-  if (weeklyData.length === 0) return null
+  if (dailyData.length === 0) return null
+
+  // Agrupar por semana para mostrar separadores
+  const weeks = useMemo(() => {
+    const map = new Map<number, typeof dailyData>()
+    dailyData.forEach(d => {
+      const w = map.get(d.weekNum) ?? []
+      w.push(d); map.set(d.weekNum, w)
+    })
+    return Array.from(map.entries()).sort(([a], [b]) => a - b)
+  }, [dailyData])
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Carga semanal (sRPE)</p>
-          <p className="text-xs text-gray-400 mt-0.5">PSE × duración de entrenamiento</p>
+          <p className="text-sm font-semibold text-gray-800">Carga diaria (sRPE)</p>
+          <p className="text-xs text-gray-400 mt-0.5">PSE × duración · barras por día agrupadas por semana</p>
         </div>
         <select value={selected} onChange={e => setSelected(e.target.value)}
           className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 text-gray-700 focus:outline-none">
@@ -516,23 +529,40 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
           {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </select>
       </div>
-      <div style={{ width: '100%', height: 200 }}>
-        <ResponsiveContainer>
-          <BarChart data={weeklyData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-            <CartesianGrid stroke="#e1e0d9" vertical={false}/>
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false}/>
-            <YAxis tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
-            <Tooltip formatter={(v: number) => [v, 'sRPE prom.']} labelFormatter={(l: string) => weeklyData.find(d => d.label === l)?.fullLabel ?? l}/>
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48} fill="#3b82f6">
-              {weeklyData.map((d, i) => {
-                const color = d.value < 400 ? '#639922' : d.value < 700 ? '#f59e0b' : d.value < 900 ? '#f97316' : '#e34948'
-                return <Cell key={i} fill={color}/>
+
+      {/* Semanas con barras diarias */}
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {weeks.map(([weekNum, days]) => (
+          <div key={weekNum} className="flex-shrink-0">
+            <p className="text-[10px] text-gray-400 font-medium text-center mb-2">Semana {weekNum}</p>
+            <div className="flex items-end gap-1.5" style={{ height: 120 }}>
+              {days.map(d => {
+                const maxVal = Math.max(...dailyData.map(x => x.value), 1)
+                const barH = d.value > 0 ? Math.max(Math.round((d.value / maxVal) * 100), 6) : 2
+                return (
+                  <div key={d.date} className="flex flex-col items-center gap-1 group relative">
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap z-10 pointer-events-none">
+                      <p className="font-semibold">{d.fullLabel}</p>
+                      <p>sRPE: {d.value || '—'}</p>
+                    </div>
+                    <div
+                      className="w-8 rounded-t-md transition-all"
+                      style={{ height: barH, backgroundColor: d.color }}
+                    />
+                    {d.value > 0 && (
+                      <span className="text-[9px] font-semibold text-gray-500">{d.value}</span>
+                    )}
+                    <span className="text-[9px] text-gray-400">{d.label}</span>
+                  </div>
+                )
               })}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
       </div>
-      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+
+      <div className="flex gap-4 mt-3 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#639922]"/>&lt;400 baja</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]"/>400-699 moderada</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]"/>700-899 alta</span>
