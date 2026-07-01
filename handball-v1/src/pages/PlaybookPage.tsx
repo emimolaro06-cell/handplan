@@ -387,67 +387,79 @@ export function PlaybookPage() {
   // ─── Export MP4 ───────────────────────────────────────────────────────────
   async function exportMP4() {
     if (framesRef.current.length < 2 || exporting) return
+
+    // Verificar soporte de WebCodecs (Chrome 94+)
+    if (typeof VideoEncoder === 'undefined') {
+      alert('Tu navegador no soporta exportación MP4. Actualizá Chrome.')
+      return
+    }
+
     setExporting('mp4')
     try {
-      const canvas = cvRef.current!
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8'
-        : 'video/webm'
-      const stream = canvas.captureStream(30)
-      const recorder = new MediaRecorder(stream, { mimeType })
-      const chunks: Blob[] = []
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+      const { Muxer, ArrayBufferTarget } = await import('mp4-muxer')
+      const { w, h } = dims(courtRef.current)
 
-      await new Promise<void>((resolve, reject) => {
-        recorder.onstop = () => {
-          try {
-            const blob = new Blob(chunks, { type: 'video/webm' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a'); a.href = url; a.download = 'jugada.webm'; a.click()
-            URL.revokeObjectURL(url)
-          } catch (err) { reject(err) }
-          resolve()
-        }
-        recorder.onerror = reject
-        recorder.start()
-
-        const totalTrans = framesRef.current.length - 1
-        const msPerTrans = 1000
-        const totalMs = totalTrans * msPerTrans
-        const MAX_MS = Math.max(totalMs + 2000, 15000) // timeout máximo
-        const startTime = performance.now()
-        let timedOut = false
-
-        // Timeout de seguridad
-        const timeout = setTimeout(() => {
-          timedOut = true
-          recorder.stop()
-        }, MAX_MS)
-
-        function tick(now: number) {
-          if (timedOut) return
-          const elapsed = now - startTime
-          const progress = Math.min(elapsed / totalMs, 1)
-          const globalStep = progress * totalTrans
-          const fi = Math.min(Math.floor(globalStep), totalTrans - 1)
-          const t = globalStep - fi
-          const scene = t >= 1 ? framesRef.current[fi + 1] : interpolateScene(framesRef.current[fi], framesRef.current[fi + 1], t)
-          paintScene(scene)
-          if (progress < 1) {
-            requestAnimationFrame(tick)
-          } else {
-            // Mantener último frame 0.8s y parar
-            setTimeout(() => {
-              clearTimeout(timeout)
-              recorder.stop()
-            }, 800)
-          }
-        }
-        requestAnimationFrame(tick)
+      const target = new ArrayBufferTarget()
+      const muxer = new Muxer({
+        target,
+        video: { codec: 'avc', width: w, height: h },
+        fastStart: 'in-memory',
       })
+
+      const encoder = new VideoEncoder({
+        output: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) =>
+          muxer.addVideoChunk(chunk, meta),
+        error: (e: Error) => { throw e },
+      })
+
+      encoder.configure({
+        codec: 'avc1.42001f',   // H.264 Baseline — compatible con todo
+        width: w, height: h,
+        bitrate: 2_500_000,
+        framerate: 30,
+      })
+
+      const FPS = 30
+      const SEC_PER_TRANS = 1.5   // segundos por transición
+      const totalTrans = framesRef.current.length - 1
+      const animFrames = Math.round(totalTrans * SEC_PER_TRANS * FPS)
+      const holdFrames = FPS       // 1 segundo de pausa al final
+      const totalFrames = animFrames + holdFrames
+
+      // Canvas offscreen para renderizar sin interferir con el principal
+      const off = document.createElement('canvas')
+      off.width = w; off.height = h
+
+      for (let fi = 0; fi < totalFrames; fi++) {
+        const progress = Math.min(fi / animFrames, 1)
+        const globalStep = progress * totalTrans
+        const transIdx = Math.min(Math.floor(globalStep), totalTrans - 1)
+        const t = Math.min(globalStep - transIdx, 1)
+        const scene = progress >= 1
+          ? framesRef.current[framesRef.current.length - 1]
+          : interpolateScene(framesRef.current[transIdx], framesRef.current[transIdx + 1], t)
+        paintScene(scene, off)
+
+        const timestamp = Math.round(fi * (1_000_000 / FPS))   // microsegundos
+        const vf = new VideoFrame(off, { timestamp })
+        encoder.encode(vf, { keyFrame: fi % 30 === 0 })
+        vf.close()
+
+        // Ceder al browser cada 15 frames para no freezear la UI
+        if (fi % 15 === 0) await new Promise(r => setTimeout(r, 0))
+      }
+
+      await encoder.flush()
+      muxer.finalize()
+
+      const blob = new Blob([target.buffer], { type: 'video/mp4' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = 'jugada.mp4'; a.click()
+      URL.revokeObjectURL(url)
+
     } catch (err) {
-      console.error('Export error:', err)
-      alert('Error al exportar. Intentá con menos frames.')
+      console.error('MP4 export error:', err)
+      alert('Error al exportar MP4. Revisá la consola para más detalles.')
     } finally {
       setExporting(null)
       paint(currentFrameRef.current)
@@ -782,7 +794,7 @@ export function PlaybookPage() {
             disabled={!!exporting || frames.length < 2}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium transition-colors">
             {exporting === 'mp4' ? <Loader2 size={13} className="animate-spin" /> : <Video size={13} />}
-            {exporting === 'mp4' ? 'Grabando...' : 'WebM'}
+            {exporting === 'mp4' ? 'Exportando...' : 'MP4'}
           </button>
         </div>
       </div>
