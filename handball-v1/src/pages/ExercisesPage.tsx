@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Trash2, Dumbbell, X, Upload, PenTool, Settings } from 'lucide-react'
+import { clsx } from '@/lib/utils'
+import { Plus, Search, Trash2, Dumbbell, X, Upload, PenTool, Settings, Folder, FolderOpen, ChevronDown } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useAppStore } from '@/lib/store'
 import { getExercises, createExercise, updateExercise, deleteExercise, uploadImage } from '@/lib/supabase'
 import { getExerciseCategories, addExerciseCategory, deleteExerciseCategory } from '@/lib/exerciseCategories'
+import { getExerciseFolders, createExerciseFolder, deleteExerciseFolder, moveExerciseToFolder } from '@/lib/exerciseFolders'
+import type { ExerciseFolder } from '@/lib/exerciseFolders'
 import { Card, Button, Input, Textarea, Spinner, Empty, Toast, Badge, Modal } from '@/components/ui/index'
 import { TacticalBoard } from '@/components/training/TacticalBoard'
 import type { Exercise } from '@/types'
@@ -23,6 +26,11 @@ export function ExercisesPage() {
   const { profile, account } = useAppStore()
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [categories, setCategories] = useState<ExerciseCategoryRow[]>([])
+  const [folders, setFolders] = useState<ExerciseFolder[]>([])
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set())
+  const [newFolderName, setNewFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [selectedFolder, setSelectedFolder] = useState<string | 'none' | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [filterCat, setFilterCat] = useState('')
   const [search,    setSearch]    = useState('')
@@ -36,6 +44,7 @@ export function ExercisesPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
   const [viewing, setViewing] = useState<Exercise | null>(null)
   const [editing, setEditing] = useState(false)
+  const [formFolder, setFormFolder] = useState<string>('')
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ExForm>()
   const {
@@ -60,13 +69,18 @@ export function ExercisesPage() {
     getExerciseCategories().then(({ data }) => {
       setCategories((data as ExerciseCategoryRow[]) ?? [])
     })
-  }, [])
+    if (profile?.id) {
+      getExerciseFolders(profile.id).then(setFolders)
+    }
+  }, [profile?.id])
 
-  const filtered = exercises.filter(e =>
-    !search ||
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.description?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = exercises.filter(e => {
+    if (search && !e.name.toLowerCase().includes(search.toLowerCase()) &&
+        !e.description?.toLowerCase().includes(search.toLowerCase())) return false
+    if (selectedFolder === 'none') return !(e as any).folder_id
+    if (selectedFolder) return (e as any).folder_id === selectedFolder
+    return true
+  })
 
   async function onSubmit(data: ExForm) {
     if (!profile) return
@@ -76,12 +90,12 @@ export function ExercisesPage() {
       const { url } = await uploadImage('exercises', imgFile)
       image_url = url
     }
-    const { data: ex, error } = await createExercise({ ...data, image_url, created_by: profile.id, account_id: account?.id })
+    const { data: ex, error } = await createExercise({ ...data, image_url, created_by: profile.id, account_id: account?.id, folder_id: formFolder || null })
     setSubmitting(false)
     if (error) { setToast({ msg: 'Error al guardar.', type: 'error' }); return }
     setExercises(p => [ex as Exercise, ...p])
     setToast({ msg: 'Ejercicio agregado.', type: 'success' })
-    reset(); setImgFile(null); setImgPrev(null); setShowForm(false)
+    reset(); setImgFile(null); setImgPrev(null); setShowForm(false); setFormFolder('')
   }
 
   async function handleDelete(id: string) {
@@ -178,6 +192,36 @@ export function ExercisesPage() {
     setCategories(p => p.filter(c => c.id !== id))
   }
 
+  async function handleCreateFolder() {
+    if (!newFolderName.trim() || !profile || !account?.id) return
+    setCreatingFolder(true)
+    try {
+      const f = await createExerciseFolder(profile.id, account.id, newFolderName)
+      setFolders(prev => [...prev, f])
+      setOpenFolders(prev => new Set([...prev, f.id]))
+      setNewFolderName('')
+    } catch { setToast({ msg: 'Error al crear carpeta.', type: 'error' }) }
+    finally { setCreatingFolder(false) }
+  }
+
+  async function handleDeleteFolder(id: string) {
+    if (!confirm('¿Borrar la carpeta? Los ejercicios dentro quedarán sin carpeta.')) return
+    await deleteExerciseFolder(id)
+    setFolders(prev => prev.filter(f => f.id !== id))
+    setExercises(prev => prev.map(e => (e as any).folder_id === id ? { ...e, folder_id: null } : e))
+    if (selectedFolder === id) setSelectedFolder(null)
+  }
+
+  async function handleMoveExercise(exerciseId: string, folderId: string | null) {
+    await moveExerciseToFolder(exerciseId, folderId)
+    setExercises(prev => prev.map(e => e.id === exerciseId ? { ...e, folder_id: folderId } as any : e))
+    setToast({ msg: 'Ejercicio movido.', type: 'success' })
+  }
+
+  function toggleFolder(id: string) {
+    setOpenFolders(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
   const catOptions = [
     { value: '', label: 'Todas' },
     ...categories.map(c => ({ value: c.category, label: c.category })),
@@ -226,6 +270,17 @@ export function ExercisesPage() {
                   {categories.map(c => <option key={c.id} value={c.category}>{c.category}</option>)}
                 </select>
                 {errors.category && <p className="text-xs text-red-600">{errors.category.message}</p>}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Carpeta (opcional)</label>
+                <select
+                  value={formFolder}
+                  onChange={e => setFormFolder(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-neutral2-400"
+                >
+                  <option value="">Sin carpeta</option>
+                  {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
               </div>
               <Input
                 label="Edad recomendada"
@@ -286,6 +341,70 @@ export function ExercisesPage() {
         </Card>
       )}
 
+      {/* Panel de carpetas */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-700">Carpetas</p>
+          <div className="flex gap-2">
+            {selectedFolder && (
+              <button type="button" onClick={() => setSelectedFolder(null)}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                Ver todos
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+            placeholder="Nueva carpeta..."
+            className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-1.5 outline-none focus:border-gray-400 transition-colors"
+          />
+          <button type="button" onClick={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-medium transition-colors">
+            <Plus size={12} /> Crear
+          </button>
+        </div>
+        {folders.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button"
+              onClick={() => setSelectedFolder(null)}
+              className={clsx('flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-colors',
+                selectedFolder === null ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+              Todos
+            </button>
+            <button type="button"
+              onClick={() => setSelectedFolder('none')}
+              className={clsx('flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-colors',
+                selectedFolder === 'none' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+              Sin carpeta
+            </button>
+            {folders.map(f => (
+              <div key={f.id} className="flex items-center gap-0.5">
+                <button type="button"
+                  onClick={() => setSelectedFolder(selectedFolder === f.id ? null : f.id)}
+                  className={clsx('flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-l-xl border-y border-l transition-colors',
+                    selectedFolder === f.id ? 'bg-amber-500 text-white border-amber-500' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                  <Folder size={11} className={selectedFolder === f.id ? 'text-white' : 'text-amber-500'} />
+                  {f.name}
+                  <span className="text-[10px] opacity-60">
+                    ({exercises.filter((e: any) => e.folder_id === f.id).length})
+                  </span>
+                </button>
+                <button type="button" onClick={() => handleDeleteFolder(f.id)}
+                  className={clsx('text-xs px-1.5 py-1.5 rounded-r-xl border-y border-r transition-colors',
+                    selectedFolder === f.id ? 'bg-amber-500 text-white/70 hover:text-white border-amber-500' : 'border-gray-200 text-gray-300 hover:text-red-400')}>
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -342,6 +461,18 @@ export function ExercisesPage() {
                 {e.description && <p className="text-xs text-gray-500 line-clamp-2">{e.description}</p>}
                 {e.objectives && <p className="text-xs text-neutral2-700 mt-1.5 line-clamp-1">Obj: {e.objectives}</p>}
                 {e.recommended_age && <p className="text-xs text-gray-400 mt-1">Edad: {e.recommended_age}</p>}
+                {folders.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-50" onClick={ev => ev.stopPropagation()}>
+                    <select
+                      value={(e as any).folder_id ?? ''}
+                      onChange={ev => handleMoveExercise(e.id, ev.target.value || null)}
+                      className="w-full text-xs border border-gray-100 rounded-lg px-2 py-1 text-gray-500 bg-white focus:outline-none focus:border-gray-300"
+                    >
+                      <option value="">Sin carpeta</option>
+                      {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
