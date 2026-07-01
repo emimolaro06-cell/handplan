@@ -23,7 +23,8 @@
     "zustand": "^4.4.7",
     "clsx": "^2.1.0",
     "recharts": "^2.10.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "mp4-muxer": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
