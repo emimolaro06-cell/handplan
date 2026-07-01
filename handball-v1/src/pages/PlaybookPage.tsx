@@ -399,7 +399,7 @@ export function PlaybookPage() {
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: 'video/webm' })
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = 'jugada.mp4'; a.click()
+      const a = document.createElement('a'); a.href = url; a.download = 'jugada.webm'; a.click()
       URL.revokeObjectURL(url); setExporting(null)
     }
     recorder.start()
@@ -752,7 +752,7 @@ export function PlaybookPage() {
             disabled={!!exporting || frames.length < 2}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium transition-colors">
             {exporting === 'mp4' ? <Loader2 size={13} className="animate-spin" /> : <Video size={13} />}
-            {exporting === 'mp4' ? 'Grabando...' : 'MP4'}
+            {exporting === 'mp4' ? 'Grabando...' : 'WebM'}
           </button>
         </div>
       </div>
