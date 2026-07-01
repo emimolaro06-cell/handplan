@@ -20,6 +20,7 @@ import { MyAssistantPage }       from '@/pages/MyAssistantPage'
 import { CreateAccountComingSoonPage } from '@/pages/CreateAccountComingSoonPage'
 import { ApproveAccountPage }    from '@/pages/ApproveAccountPage'
 import { PlaybookPage }          from '@/pages/PlaybookPage'
+import { PhysicalPage }          from '@/pages/PhysicalPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -72,7 +73,8 @@ export default function App() {
         <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
         <Route path="/pizarra"           element={<AuthGuard><AppLayout><PlaybookPage/></AppLayout></AuthGuard>}/>
         <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
-        <Route path="/asistencia"        element={<WithLayout><AttendancePage/></WithLayout>}/>
+        <Route path="/asistencia"           element={<WithLayout><AttendancePage/></WithLayout>}/>
+        <Route path="/preparacion-fisica"   element={<AuthGuard><AppLayout><PhysicalPage/></AppLayout></AuthGuard>}/>
         <Route path="/mi-ayudante"       element={<WithLayout><MyAssistantPage/></WithLayout>}/>
 
         <Route path="*" element={<Navigate to="/" replace/>}/>
