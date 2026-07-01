@@ -519,6 +519,8 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
     return Array.from(map.entries()).sort(([a], [b]) => a - b)
   }, [dailyData])
 
+  if (dailyData.length === 0) return null
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
