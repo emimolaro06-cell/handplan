@@ -174,7 +174,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     .catch(() => onToast({ msg: 'Error al cargar asistencia.', type: 'error' }))
     .finally(() => setLoading(false))
     setExtraDays([])
-  }, [playerIds.join(','), start, end])
+  }, [players, start, end])
 
   const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
 
@@ -407,7 +407,7 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
   useEffect(() => {
     getAttendanceForTurnoInRange(playerIds, TURNO, start, end)
       .then(setRecords)
-  }, [playerIds.join(','), start, end, refreshKey])
+  }, [players, start, end, refreshKey])
 
   const relevant = records.filter(r => r.status === 'presente' && r.pse != null &&
     (selected === '__team__' || r.player_id === selected))
@@ -475,7 +475,7 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
       getAttendanceForTurnoInRange(playerIds, TURNO, start, end),
       getAttendanceForTurnoInRange(playerIds, 'Pelota', start, end),
     ]).then(([f, p]) => { setFisicoRecords(f); setPelotaRecords(p) })
-  }, [playerIds.join(','), start, end, refreshKey])
+  }, [players, start, end, refreshKey])
 
   const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
   const allDates = useMemo(() => Array.from(new Set(fisicoRecords.map(r => r.date))).sort(), [fisicoRecords])
