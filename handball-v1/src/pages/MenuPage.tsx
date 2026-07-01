@@ -1,6 +1,6 @@
 import { clsx } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
-import { PlusCircle, BookOpen, ChevronRight, Calendar, Clock } from 'lucide-react'
+import { PlusCircle, BookOpen, ChevronRight, Calendar, Clock, X, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { useAppStore } from '@/lib/store'
@@ -25,7 +25,18 @@ export function MenuPage() {
       })
   }, [effectiveUserId, selectedCategory])
 
-  const catStyle = selectedCategory ? TEAM_CATEGORY_STYLES[selectedCategory] : null
+  const CURRENT_VERSION = 'v1.2'
+  const [showNews, setShowNews] = useState(false)
+
+  useEffect(() => {
+    const seen = localStorage.getItem('handplan_news_seen')
+    if (seen !== CURRENT_VERSION) setShowNews(true)
+  }, [])
+
+  function closeNews() {
+    localStorage.setItem('handplan_news_seen', CURRENT_VERSION)
+    setShowNews(false)
+  }
   const color = account?.primary_color || '#1e8a1e'
   const logoUrl = account?.logo_url || '/logo-handplan.svg'
   const accountName = account?.name || 'HandPlan'
@@ -128,5 +139,55 @@ export function MenuPage() {
         )}
       </div>
     </div>
+
+    {/* Modal de novedades */}
+    {showNews && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+          <div className="px-6 pt-6 pb-4 flex items-start justify-between" style={{ backgroundColor: color }}>
+            <div className="flex items-center gap-2">
+              <Sparkles size={20} className="text-white/80" />
+              <div>
+                <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">Novedades</p>
+                <p className="text-white font-bold text-lg leading-tight">¡HandPlan se actualizó! 🎉</p>
+              </div>
+            </div>
+            <button type="button" onClick={closeNews} className="text-white/60 hover:text-white transition-colors mt-0.5">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex gap-3">
+              <span className="text-2xl flex-shrink-0">🎬</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Pizarra animada</p>
+                <p className="text-gray-500 text-xs mt-0.5">Creá jugadas por fotogramas y exportalas directo como MP4 para mandarle a los jugadores por WhatsApp.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-2xl flex-shrink-0">📁</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Carpetas de ejercicios</p>
+                <p className="text-gray-500 text-xs mt-0.5">Organizá tu biblioteca de ejercicios en carpetas como quieras. Mucho más fácil encontrar lo que necesitás.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-2xl flex-shrink-0">💪</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Preparadores físicos</p>
+                <p className="text-gray-500 text-xs mt-0.5">El preparador ya puede tomar asistencia de su hora, cargar el PSE de cada jugador y ver el seguimiento estadístico del mes.</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 pb-6">
+            <button type="button" onClick={closeNews}
+              className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90"
+              style={{ backgroundColor: color }}>
+              ¡Entendido, vamos!
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }
