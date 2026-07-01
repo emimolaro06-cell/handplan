@@ -42,6 +42,7 @@ export function MenuPage() {
   const accountName = account?.name || 'HandPlan'
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       {/* Hero header */}
       <div className="px-6 pt-10 pb-16" style={{ backgroundColor: color }}>
@@ -189,5 +190,6 @@ export function MenuPage() {
         </div>
       </div>
     )}
+    </>
   )
 }
