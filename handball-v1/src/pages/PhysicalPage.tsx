@@ -183,10 +183,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
   }
   function getPSE(playerId: string, date: string): number | null {
-    // Primero busca en Físico, si no hay busca en Pelota
-    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse
-      ?? pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.pse
-      ?? null
+    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse ?? null
   }
   function getPelotaPresent(playerId: string, date: string): boolean {
     return pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.status === 'presente'
@@ -196,10 +193,12 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     const current = getStatus(playerId, date)
     try {
       if (current === 'presente') {
+        // presente → null (limpiar)
         await clearAttendanceStatus(playerId, date, TURNO)
         await setAttendancePSE(playerId, date, TURNO, null).catch(() => {})
         setFisicoRecords(prev => prev.filter(r => !(r.player_id === playerId && r.date === date)))
       } else {
+        // null/ausente → presente
         await setAttendanceStatus(playerId, date, TURNO, 'presente')
         setFisicoRecords(prev => {
           const existing = prev.find(r => r.player_id === playerId && r.date === date)
@@ -233,14 +232,6 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     try {
       await setAttendancePSE(playerId, date, TURNO, pse)
       setFisicoRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
-      onVersionBump()
-    } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
-  }
-
-  async function handleSetPelotaPSE(playerId: string, date: string, pse: number | null) {
-    try {
-      await setAttendancePSE(playerId, date, 'Pelota', pse)
-      setPelotaRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
       onVersionBump()
     } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
   }
@@ -347,17 +338,12 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                               P
                             </button>
                           </div>
-                          {/* PSE con colores — se muestra si fue a Físico O a Pelota */}
-                          {(fPresent || pPresent) && (
+                          {/* PSE con colores */}
+                          {fPresent && (
                             <>
                               <select
                                 value={pse ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value ? Number(e.target.value) : null
-                                  // Si fue a Físico, guardar PSE en Físico; si solo Pelota, guardar en Pelota
-                                  if (fPresent) handleSetPSE(player.id, d, val)
-                                  else handleSetPelotaPSE(player.id, d, val)
-                                }}
+                                onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}
                                 className={clsx('mt-1 w-11 h-6 text-[10px] rounded-md border border-gray-200 text-center bg-white mx-auto block font-semibold',
                                   pse ? pseColorClass(pse) : 'text-gray-500')}
                                 title="PSE (1-10)">
@@ -416,18 +402,16 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
 function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
   const [selected, setSelected] = useState('__team__')
   const [records, setRecords] = useState<AttendanceRecord[]>([])
-  const [weeklyData, setWeeklyData] = useState<{ label: string; fullLabel: string; value: number }[]>([])
-
-  const { start, end } = getMonthRange(refMonth)
   const playerIdsKey = players.map(p => p.id).join(',')
+  const { start, end } = getMonthRange(refMonth)
 
   useEffect(() => {
     const ids = players.map(p => p.id)
-    if (ids.length === 0) return
+    if (ids.length === 0) { setRecords([]); return }
     getAttendanceForTurnoInRange(ids, TURNO, start, end).then(setRecords)
   }, [playerIdsKey, start, end, refreshKey])
 
-  useEffect(() => {
+  const weeklyData = (() => {
     const relevant = records.filter(r =>
       r.status === 'presente' && r.pse != null &&
       (selected === '__team__' || r.player_id === selected)
@@ -440,15 +424,14 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
       const b = buckets.get(key) ?? { sum: 0, count: 0, weekStart: ws }
       b.sum += r.pse as number; b.count += 1; buckets.set(key, b)
     })
-    const data = Array.from(buckets.entries())
+    return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, b], i) => ({
         label: `Sem ${i + 1}`,
         fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
         value: Math.round((b.sum / b.count) * 10) / 10,
       }))
-    setWeeklyData(data)
-  }, [records, selected])
+  })()
 
   if (weeklyData.length === 0) return null
 
@@ -486,68 +469,51 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GRÁFICO DE sRPE DIARIO (barras por día, agrupadas por semana)
+// GRÁFICO DE sRPE DIARIO — una barra por día, agrupadas por semana
 // ════════════════════════════════════════════════════════════════════════════
 function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
   const [selected, setSelected] = useState('__team__')
   const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
   const playerIdsKey = players.map(p => p.id).join(',')
-  const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
-  const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
+  const { start, end } = getMonthRange(refMonth)
 
   useEffect(() => {
+    const ids = players.map(p => p.id)
+    if (ids.length === 0) { setFisicoRecords([]); setPelotaRecords([]); return }
     Promise.all([
-      getAttendanceForTurnoInRange(playerIds, TURNO, start, end),
-      getAttendanceForTurnoInRange(playerIds, 'Pelota', start, end),
+      getAttendanceForTurnoInRange(ids, TURNO, start, end),
+      getAttendanceForTurnoInRange(ids, 'Pelota', start, end),
     ]).then(([f, p]) => { setFisicoRecords(f); setPelotaRecords(p) })
   }, [playerIdsKey, start, end, refreshKey])
 
   const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-  const allDates = useMemo(() => Array.from(new Set(fisicoRecords.map(r => r.date))).sort(), [fisicoRecords])
 
-  // Barras diarias con separador de semana
-  const dailyData = useMemo(() => {
+  const dailyData = (() => {
+    const allDates = Array.from(new Set(fisicoRecords.map(r => r.date))).sort()
     return allDates.map(date => {
       const srpes = relevantPlayers
         .map(p => computeSRPE(p.id, date, fisicoRecords, pelotaRecords).srpe)
         .filter(v => v > 0)
       const avg = srpes.length > 0 ? Math.round(srpes.reduce((a, b) => a + b, 0) / srpes.length) : 0
       const day = new Date(date + 'T12:00:00')
-      const weekNum = Math.ceil((day.getDate() + startOfWeek(day, { weekStartsOn: 1 }).getDay()) / 7)
       return {
-        date,
         label: format(day, 'd/MM'),
-        fullLabel: format(day, "EEEE d 'de' MMMM", { locale: es }),
+        fullLabel: format(day, "EEE d MMM", { locale: es }),
         value: avg,
-        weekNum,
-        color: avg === 0 ? '#e5e7eb'
-          : avg < 400 ? '#639922'
-          : avg < 700 ? '#f59e0b'
-          : avg < 900 ? '#f97316'
-          : '#e34948',
+        color: avg < 400 ? '#639922' : avg < 700 ? '#f59e0b' : avg < 900 ? '#f97316' : '#e34948',
       }
-    })
-  }, [allDates, relevantPlayers, fisicoRecords, pelotaRecords])
-
-  // Agrupar por semana para mostrar separadores
-  const weeks = useMemo(() => {
-    const map = new Map<number, typeof dailyData>()
-    dailyData.forEach(d => {
-      const w = map.get(d.weekNum) ?? []
-      w.push(d); map.set(d.weekNum, w)
-    })
-    return Array.from(map.entries()).sort(([a], [b]) => a - b)
-  }, [dailyData])
+    }).filter(d => d.value > 0)
+  })()
 
   if (dailyData.length === 0) return null
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div>
           <p className="text-sm font-semibold text-gray-800">Carga diaria (sRPE)</p>
-          <p className="text-xs text-gray-400 mt-0.5">PSE × duración · barras por día agrupadas por semana</p>
+          <p className="text-xs text-gray-400 mt-0.5">PSE × duración de entrenamiento</p>
         </div>
         <select value={selected} onChange={e => setSelected(e.target.value)}
           className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 text-gray-700 focus:outline-none">
@@ -555,40 +521,23 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
           {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </select>
       </div>
-
-      {/* Semanas con barras diarias */}
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {weeks.map(([weekNum, days]) => (
-          <div key={weekNum} className="flex-shrink-0">
-            <p className="text-[10px] text-gray-400 font-medium text-center mb-2">Semana {weekNum}</p>
-            <div className="flex items-end gap-1.5" style={{ height: 120 }}>
-              {days.map(d => {
-                const maxVal = Math.max(...dailyData.map(x => x.value), 1)
-                const barH = d.value > 0 ? Math.max(Math.round((d.value / maxVal) * 100), 6) : 2
-                return (
-                  <div key={d.date} className="flex flex-col items-center gap-1 group relative">
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap z-10 pointer-events-none">
-                      <p className="font-semibold">{d.fullLabel}</p>
-                      <p>sRPE: {d.value || '—'}</p>
-                    </div>
-                    <div
-                      className="w-8 rounded-t-md transition-all"
-                      style={{ height: barH, backgroundColor: d.color }}
-                    />
-                    {d.value > 0 && (
-                      <span className="text-[9px] font-semibold text-gray-500">{d.value}</span>
-                    )}
-                    <span className="text-[9px] text-gray-400">{d.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer>
+          <BarChart data={dailyData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+            <CartesianGrid stroke="#e1e0d9" vertical={false}/>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false} interval={0}/>
+            <YAxis tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
+            <Tooltip
+              formatter={(v: number) => [v, 'sRPE']}
+              labelFormatter={(l: string) => dailyData.find(d => d.label === l)?.fullLabel ?? l}
+            />
+            <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={36}>
+              {dailyData.map((d, i) => <Cell key={i} fill={d.color}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
-
-      <div className="flex gap-4 mt-3 text-xs text-gray-500 flex-wrap">
+      <div className="flex gap-4 mt-2 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#639922]"/>&lt;400 baja</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]"/>400-699 moderada</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]"/>700-899 alta</span>
