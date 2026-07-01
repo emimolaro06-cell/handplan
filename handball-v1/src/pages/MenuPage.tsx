@@ -40,6 +40,7 @@ export function MenuPage() {
   const color = account?.primary_color || '#1e8a1e'
   const logoUrl = account?.logo_url || '/logo-handplan.svg'
   const accountName = account?.name || 'HandPlan'
+  const catStyle = selectedCategory ? TEAM_CATEGORY_STYLES[selectedCategory] : null
 
   return (
     <>
