@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, BookOpen, Dumbbell,
-  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck, Users, Layers,
+  LogOut, Menu, X, ChevronRight, CalendarDays, UserCheck, Users, Layers, Activity,
 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -10,13 +10,14 @@ import { TEAM_CATEGORY_BG } from '@/lib/constants'
 import type { TeamCategory } from '@/types'
 
 const NAV = [
-  { to: '/menu',          icon: LayoutDashboard, label: 'Inicio' },
-  { to: '/crear',         icon: PlusCircle,      label: 'Crear entrenamiento' },
-  { to: '/biblioteca',    icon: BookOpen,         label: 'Biblioteca' },
-  { to: '/ejercicios',    icon: Dumbbell,         label: 'Ejercicios' },
-  { to: '/pizarra',       icon: Layers,           label: 'Pizarra' },
-  { to: '/planificacion', icon: CalendarDays,     label: 'Planificación mensual' },
-  { to: '/asistencia',    icon: UserCheck,        label: 'Asistencia' },
+  { to: '/menu',                icon: LayoutDashboard, label: 'Inicio' },
+  { to: '/crear',               icon: PlusCircle,      label: 'Crear entrenamiento' },
+  { to: '/biblioteca',          icon: BookOpen,         label: 'Biblioteca' },
+  { to: '/ejercicios',          icon: Dumbbell,         label: 'Ejercicios' },
+  { to: '/pizarra',             icon: Layers,           label: 'Pizarra' },
+  { to: '/planificacion',       icon: CalendarDays,     label: 'Planificación mensual' },
+  { to: '/asistencia',          icon: UserCheck,        label: 'Asistencia' },
+  { to: '/preparacion-fisica',  icon: Activity,         label: 'Preparación Física' },
 ]
 
 // Oscurece un color hex un porcentaje dado (0-1), para variantes más oscuras sin clases fijas
