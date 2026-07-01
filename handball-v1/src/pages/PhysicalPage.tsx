@@ -8,7 +8,7 @@ import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
 import {
   listPlayers, addPlayer, deletePlayer,
-  getAttendanceForTurnoInRange, setAttendanceStatus, clearAttendanceStatus,
+  getAttendanceForTurnoInRange, setAttendanceStatus, clearAttendanceStatus, clearAttendanceDay,
   setAttendancePSE, getMonthRange, getAttendanceHeader, saveAttendanceHeader,
 } from '@/lib/attendance'
 import { computeSRPE, pseColorClass, pseChartColor, WEEK_DAY_LABELS } from '@/lib/attendanceWeekDays'
@@ -320,10 +320,15 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                       <span className="text-emerald-500">F</span>
                       <span className="text-blue-400">P</span>
                     </div>
-                    <button type="button" onClick={() => {
-                      if (!confirm('¿Borrar este día?')) return
-                      setFisicoRecords(prev => prev.filter(r => r.date !== d))
-                      setExtraDays(prev => prev.filter(x => x !== d))
+                    <button type="button" onClick={async () => {
+                      if (!confirm('¿Borrar este día? Se eliminarán todos los registros.')) return
+                      try {
+                        await clearAttendanceDay(d, TURNO)
+                        await clearAttendanceDay(d, 'Pelota')
+                        setFisicoRecords(prev => prev.filter(r => r.date !== d))
+                        setPelotaRecords(prev => prev.filter(r => r.date !== d))
+                        setExtraDays(prev => prev.filter(x => x !== d))
+                      } catch { onToast({ msg: 'Error al borrar el día.', type: 'error' }) }
                     }} className="text-gray-200 hover:text-red-400 transition-colors mt-0.5">
                       <Trash2 size={10}/>
                     </button>
