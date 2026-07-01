@@ -1,6 +1,12 @@
 import { useRef, useState, useEffect } from 'react'
-import { RotateCcw, Trash2, Play, Pause, Plus, Film, MousePointer, Minus, Loader2, Video } from 'lucide-react'
+import { Trash2, Play, Pause, Plus, Film, MousePointer, Minus, Loader2, Video, Save, Folder, FolderOpen, ChevronDown, X, Edit2 } from 'lucide-react'
 import { clsx } from '@/lib/utils'
+import { useAppStore } from '@/lib/store'
+import {
+  getFolders, createFolder, deleteFolder, renameFolder,
+  getJugadas, saveJugada, deleteJugada,
+} from '@/lib/playbook'
+import type { PlaybookFolder, PlaybookJugada } from '@/lib/playbook'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tool =
@@ -230,6 +236,23 @@ export function PlaybookPage() {
   // Export
   const [exporting, setExporting] = useState<'gif' | 'mp4' | null>(null)
 
+  // Metadata de la jugada actual
+  const [jugadaTitle, setJugadaTitle] = useState('')
+  const [jugadaDesc, setJugadaDesc] = useState('')
+  const [jugadaId, setJugadaId] = useState<string | null>(null)  // null = nueva jugada
+
+  // Biblioteca
+  const { effectiveUserId, account } = useAppStore()
+  const [folders, setFolders] = useState<PlaybookFolder[]>([])
+  const [jugadas, setJugadas] = useState<PlaybookJugada[]>([])
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set())
+  const [loadingLib, setLoadingLib] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [saveFolder, setSaveFolder] = useState<string | null>(null)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+
   // Canvas refs
   const cvRef = useRef<HTMLCanvasElement>(null)
   const toolRef = useRef<Tool>('select')
@@ -444,8 +467,109 @@ export function PlaybookPage() {
     }
   }
 
+  // ─── Biblioteca ───────────────────────────────────────────────────────────
+  async function loadLibrary() {
+    if (!effectiveUserId) return
+    setLoadingLib(true)
+    try {
+      const [f, j] = await Promise.all([
+        getFolders(effectiveUserId),
+        getJugadas(effectiveUserId),
+      ])
+      setFolders(f); setJugadas(j)
+    } catch { /* silencioso */ }
+    finally { setLoadingLib(false) }
+  }
+
+  async function handleCreateFolder() {
+    if (!newFolderName.trim() || !effectiveUserId || !account?.id) return
+    setCreatingFolder(true)
+    try {
+      const f = await createFolder(effectiveUserId, account.id, newFolderName)
+      setFolders(prev => [...prev, f])
+      setOpenFolders(prev => new Set([...prev, f.id]))
+      setNewFolderName('')
+    } catch { /* silencioso */ }
+    finally { setCreatingFolder(false) }
+  }
+
+  async function handleDeleteFolder(id: string) {
+    if (!confirm('¿Borrar la carpeta y todas sus jugadas?')) return
+    await deleteFolder(id)
+    setFolders(prev => prev.filter(f => f.id !== id))
+    setJugadas(prev => prev.filter(j => j.folder_id !== id))
+  }
+
+  async function handleSaveJugada() {
+    if (!effectiveUserId || !account?.id) return
+    setSaving(true)
+    try {
+      const thumbnail = renderThumbnail(framesRef.current[0])
+      const result = await saveJugada({
+        id: jugadaId ?? undefined,
+        coachId: effectiveUserId,
+        accountId: account.id,
+        folderId: saveFolder,
+        title: jugadaTitle,
+        description: jugadaDesc,
+        frames: framesRef.current,
+        courtMode: courtRef.current,
+        thumbnail,
+      })
+      setJugadaId(result.id)
+      setJugadas(prev => {
+        const exists = prev.find(j => j.id === result.id)
+        return exists ? prev.map(j => j.id === result.id ? result : j) : [result, ...prev]
+      })
+      setShowSaveModal(false)
+    } catch { alert('Error al guardar.') }
+    finally { setSaving(false) }
+  }
+
+  function loadJugada(j: PlaybookJugada) {
+    if (!confirm(`¿Cargar "${j.title}"? Se perderán los cambios no guardados.`)) return
+    const loadedFrames = j.frames as Scene[]
+    framesRef.current = loadedFrames
+    courtRef.current = j.court_mode as CourtMode
+    setFrames([...loadedFrames])
+    setCourtMode(j.court_mode as CourtMode)
+    setJugadaId(j.id)
+    setJugadaTitle(j.title)
+    setJugadaDesc(j.description)
+    setThumbnails(loadedFrames.map(f => renderThumbnail(f)))
+    currentFrameRef.current = 0; setCurrentFrame(0)
+    selId.current = null; selArrowId.current = null
+    paint(0)
+  }
+
+  async function handleDeleteJugada(id: string) {
+    if (!confirm('¿Borrar esta jugada?')) return
+    await deleteJugada(id)
+    setJugadas(prev => prev.filter(j => j.id !== id))
+    if (jugadaId === id) setJugadaId(null)
+  }
+
+  function toggleFolder(id: string) {
+    setOpenFolders(prev => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  function newJugada() {
+    if (!confirm('¿Empezar una jugada nueva? Se perderán los cambios no guardados.')) return
+    framesRef.current = [emptyScene()]
+    setFrames([emptyScene()])
+    setThumbnails([''])
+    setJugadaId(null); setJugadaTitle(''); setJugadaDesc('')
+    currentFrameRef.current = 0; setCurrentFrame(0)
+    counts.current = { own: 1, rival: 1, gk: 1 }
+    paint(0)
+  }
+
   // ─── Init & keyboard ─────────────────────────────────────────────────────
-  useEffect(() => { paint() }, [])
+  useEffect(() => { paint(); loadLibrary() }, [])
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
@@ -589,7 +713,7 @@ export function PlaybookPage() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -610,6 +734,14 @@ export function PlaybookPage() {
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 transition-colors">
             <Trash2 size={13} /> Limpiar
           </button>
+          <button type="button" onClick={newJugada}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 hover:border-gray-300 transition-colors">
+            <Plus size={13} /> Nueva
+          </button>
+          <button type="button" onClick={() => { setSaveFolder(null); setShowSaveModal(true) }}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
+            <Save size={13} /> Guardar jugada
+          </button>
           <button type="button" onClick={exportGIF}
             disabled={!!exporting || frames.length < 2}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium transition-colors">
@@ -623,6 +755,27 @@ export function PlaybookPage() {
             {exporting === 'mp4' ? 'Grabando...' : 'MP4'}
           </button>
         </div>
+      </div>
+
+      {/* Campos de texto: título y descripción */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <input
+          type="text"
+          value={jugadaTitle}
+          onChange={e => setJugadaTitle(e.target.value)}
+          placeholder="Título de la jugada (ej: Contraataque 2 vs 1)"
+          className="w-full text-lg font-semibold text-gray-900 placeholder:text-gray-300 border-none outline-none focus:ring-0 bg-transparent"
+        />
+        <textarea
+          value={jugadaDesc}
+          onChange={e => setJugadaDesc(e.target.value)}
+          placeholder="Descripción, consignas, variantes, errores a evitar..."
+          rows={3}
+          className="w-full text-sm text-gray-600 placeholder:text-gray-300 border-none outline-none focus:ring-0 bg-transparent resize-none"
+        />
+        {jugadaId && (
+          <p className="text-xs text-gray-300">Jugada guardada · ID {jugadaId.slice(0, 8)}</p>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -742,6 +895,161 @@ export function PlaybookPage() {
       <p className="text-xs text-gray-400 text-center">
         Editá cada fotograma → mové los jugadores de posición → "Agregar" para sumar frames → Reproducir para ver la animación
       </p>
+
+      {/* ─── Biblioteca de jugadas ──────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-gray-900">Mis jugadas</h2>
+          <button type="button" onClick={loadLibrary}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            Actualizar
+          </button>
+        </div>
+
+        {/* Crear carpeta */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+            placeholder="Nueva carpeta..."
+            className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:border-gray-400 transition-colors"
+          />
+          <button type="button" onClick={handleCreateFolder} disabled={creatingFolder || !newFolderName.trim()}
+            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-medium transition-colors">
+            <Plus size={13} /> Crear carpeta
+          </button>
+        </div>
+
+        {loadingLib ? (
+          <p className="text-sm text-gray-400 text-center py-4">Cargando...</p>
+        ) : folders.length === 0 && jugadas.filter(j => !j.folder_id).length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">
+            Todavía no hay jugadas guardadas. Creá tu primera carpeta y guardá una jugada.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {/* Jugadas sin carpeta */}
+            {jugadas.filter(j => !j.folder_id).map(j => (
+              <JugadaCard key={j.id} jugada={j} onLoad={loadJugada} onDelete={handleDeleteJugada} />
+            ))}
+
+            {/* Carpetas */}
+            {folders.map(folder => {
+              const isOpen = openFolders.has(folder.id)
+              const folderJugadas = jugadas.filter(j => j.folder_id === folder.id)
+              return (
+                <div key={folder.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                  <button type="button"
+                    onClick={() => toggleFolder(folder.id)}
+                    className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                    {isOpen ? <FolderOpen size={15} className="text-amber-500 flex-shrink-0" /> : <Folder size={15} className="text-amber-500 flex-shrink-0" />}
+                    <span className="text-sm font-medium text-gray-800 flex-1">{folder.name}</span>
+                    <span className="text-xs text-gray-400">{folderJugadas.length}</span>
+                    <ChevronDown size={14} className={clsx('text-gray-400 transition-transform', isOpen && 'rotate-180')} />
+                    <button type="button"
+                      onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
+                      className="text-gray-300 hover:text-red-400 transition-colors ml-1">
+                      <Trash2 size={12} />
+                    </button>
+                  </button>
+                  {isOpen && (
+                    <div className="p-3 space-y-2">
+                      {folderJugadas.length === 0 ? (
+                        <p className="text-xs text-gray-400 text-center py-2">Carpeta vacía</p>
+                      ) : (
+                        folderJugadas.map(j => (
+                          <JugadaCard key={j.id} jugada={j} onLoad={loadJugada} onDelete={handleDeleteJugada} />
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Modal guardar ──────────────────────────────────────────────────── */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-900">Guardar jugada</h3>
+              <button type="button" onClick={() => setShowSaveModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 font-medium block mb-1">Título</label>
+                <input type="text" value={jugadaTitle} onChange={e => setJugadaTitle(e.target.value)}
+                  placeholder="Sin título"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-400" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium block mb-1">Carpeta</label>
+                <select
+                  value={saveFolder ?? ''}
+                  onChange={e => setSaveFolder(e.target.value || null)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-400 bg-white">
+                  <option value="">Sin carpeta</option>
+                  {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setShowSaveModal(false)}
+                className="flex-1 text-sm py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleSaveJugada} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 text-sm py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-medium transition-colors">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Tarjeta de jugada ────────────────────────────────────────────────────────
+function JugadaCard({ jugada, onLoad, onDelete }: {
+  jugada: PlaybookJugada
+  onLoad: (j: PlaybookJugada) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 rounded-xl p-2.5 transition-colors group">
+      {jugada.thumbnail ? (
+        <img src={jugada.thumbnail} alt={jugada.title} className="w-16 h-10 rounded-lg object-cover flex-shrink-0" />
+      ) : (
+        <div className="w-16 h-10 rounded-lg bg-blue-200 flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 truncate">{jugada.title}</p>
+        {jugada.description && (
+          <p className="text-xs text-gray-400 truncate">{jugada.description}</p>
+        )}
+        <p className="text-[10px] text-gray-300 mt-0.5">
+          {(jugada.frames as unknown[]).length} frame{(jugada.frames as unknown[]).length !== 1 ? 's' : ''}
+        </p>
+      </div>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" onClick={() => onLoad(jugada)}
+          className="text-xs px-2 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium transition-colors">
+          Cargar
+        </button>
+        <button type="button" onClick={() => onDelete(jugada.id)}
+          className="text-gray-300 hover:text-red-400 transition-colors p-1">
+          <Trash2 size={12} />
+        </button>
+      </div>
     </div>
   )
 }
