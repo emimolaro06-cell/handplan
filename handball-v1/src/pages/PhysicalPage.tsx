@@ -146,7 +146,6 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   const [extraDays, setExtraDays] = useState<string[]>([])
   const [showAddDay, setShowAddDay] = useState(false)
   const [newDayValue, setNewDayValue] = useState('')
-  const [menuFor, setMenuFor] = useState<{ playerId: string; date: string; x: number; y: number } | null>(null)
   const [headerInfo, setHeaderInfo] = useState({ coach: '', assistant: '' })
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -185,19 +184,43 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   function getPSE(playerId: string, date: string): number | null {
     return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse ?? null
   }
+  function getPelotaPresent(playerId: string, date: string): boolean {
+    return pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.status === 'presente'
+  }
 
-  async function handleSetStatus(playerId: string, date: string, status: AttendanceStatus | null) {
+  async function handleToggleFisico(playerId: string, date: string) {
+    const current = getStatus(playerId, date)
     try {
-      if (status === null) {
+      if (current === 'presente') {
+        // presente → null (limpiar)
         await clearAttendanceStatus(playerId, date, TURNO)
+        await setAttendancePSE(playerId, date, TURNO, null).catch(() => {})
         setFisicoRecords(prev => prev.filter(r => !(r.player_id === playerId && r.date === date)))
       } else {
-        await setAttendanceStatus(playerId, date, TURNO, status)
-        if (status !== 'presente') await setAttendancePSE(playerId, date, TURNO, null).catch(() => {})
+        // null/ausente → presente
+        await setAttendanceStatus(playerId, date, TURNO, 'presente')
         setFisicoRecords(prev => {
           const existing = prev.find(r => r.player_id === playerId && r.date === date)
-          if (existing) return prev.map(r => r === existing ? { ...r, status, pse: status === 'presente' ? r.pse : null } : r)
-          return [...prev, { id: '', player_id: playerId, date, turno: TURNO, status, pse: null, created_at: '' }]
+          if (existing) return prev.map(r => r === existing ? { ...r, status: 'presente' } : r)
+          return [...prev, { id: '', player_id: playerId, date, turno: TURNO, status: 'presente', pse: null, created_at: '' }]
+        })
+      }
+      onVersionBump()
+    } catch { onToast({ msg: 'Error al guardar.', type: 'error' }) }
+  }
+
+  async function handleTogglePelota(playerId: string, date: string) {
+    const isPresent = getPelotaPresent(playerId, date)
+    try {
+      if (isPresent) {
+        await clearAttendanceStatus(playerId, date, 'Pelota')
+        setPelotaRecords(prev => prev.filter(r => !(r.player_id === playerId && r.date === date)))
+      } else {
+        await setAttendanceStatus(playerId, date, 'Pelota', 'presente')
+        setPelotaRecords(prev => {
+          const existing = prev.find(r => r.player_id === playerId && r.date === date)
+          if (existing) return prev.map(r => r === existing ? { ...r, status: 'presente' } : r)
+          return [...prev, { id: '', player_id: playerId, date, turno: 'Pelota', status: 'presente', pse: null, created_at: '' }]
         })
       }
       onVersionBump()
@@ -264,9 +287,13 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider sticky left-0 bg-white w-36">Jugador</th>
                 {days.map(d => (
-                  <th key={d} className={clsx('px-2 py-3 text-center text-xs font-semibold text-gray-600 min-w-[72px]', d === todayKey && 'bg-blue-50')}>
+                  <th key={d} className={clsx('px-2 py-3 text-center text-xs font-semibold text-gray-600 min-w-[80px]', d === todayKey && 'bg-blue-50')}>
                     <div data-day-col={d}>{format(new Date(d + 'T12:00'), 'd/MM')}</div>
                     <div className="text-[10px] text-gray-400">{format(new Date(d + 'T12:00'), 'EEE', { locale: es })}</div>
+                    <div className="flex justify-center gap-1 mt-0.5 text-[9px] font-bold">
+                      <span className="text-emerald-500">F</span>
+                      <span className="text-blue-400">P</span>
+                    </div>
                     <button type="button" onClick={() => {
                       if (!confirm('¿Borrar este día?')) return
                       setFisicoRecords(prev => prev.filter(r => r.date !== d))
@@ -276,37 +303,42 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                     </button>
                   </th>
                 ))}
-                <th className="px-2 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">%</th>
+                <th className="px-2 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">%F</th>
                 <th className="px-2 py-3 text-xs text-gray-400 uppercase tracking-wider w-8"></th>
               </tr>
             </thead>
             <tbody>
               {players.map(player => {
                 const presences = days.filter(d => getStatus(player.id, d) === 'presente').length
-                const total = days.filter(d => getStatus(player.id, d) !== null && getStatus(player.id, d) !== 'lesionado').length
+                const total = days.length
                 const pct = total > 0 ? Math.round((presences / total) * 100) : 0
                 return (
                   <tr key={player.id} className="border-t border-gray-50 hover:bg-gray-50/50">
                     <td className="px-4 py-2 font-medium text-gray-800 sticky left-0 bg-white text-sm">{player.full_name}</td>
                     {days.map(d => {
-                      const status = getStatus(player.id, d)
+                      const fPresent = getStatus(player.id, d) === 'presente'
+                      const pPresent = getPelotaPresent(player.id, d)
                       const pse = getPSE(player.id, d)
                       const { srpe, duration } = computeSRPE(player.id, d, fisicoRecords, pelotaRecords)
-                      const isOpen = menuFor?.playerId === player.id && menuFor?.date === d
                       return (
-                        <td key={d} className={clsx('px-1 py-1 border-b border-gray-50 text-center', d === todayKey && 'bg-blue-50/30')}>
-                          {/* Botón de estado */}
-                          <button
-                            onClick={e => {
-                              const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-                              setMenuFor(isOpen ? null : { playerId: player.id, date: d, x: rect.left + rect.width / 2, y: rect.bottom + 8 })
-                            }}
-                            className={clsx('w-9 h-7 rounded-lg text-xs font-bold transition-colors block mx-auto',
-                              status ? STATUS_STYLE[status].cls : 'bg-gray-50 text-gray-300 hover:bg-gray-100')}>
-                            {status ? STATUS_STYLE[status].label : '−'}
-                          </button>
+                        <td key={d} className={clsx('px-1 py-1.5 border-b border-gray-50 text-center', d === todayKey && 'bg-blue-50/30')}>
+                          {/* Botones F y P */}
+                          <div className="flex gap-0.5 justify-center">
+                            <button type="button" onClick={() => handleToggleFisico(player.id, d)}
+                              title="Físico"
+                              className={clsx('w-7 h-6 rounded-md text-[10px] font-bold transition-colors',
+                                fPresent ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-50 text-gray-300 hover:bg-gray-100')}>
+                              F
+                            </button>
+                            <button type="button" onClick={() => handleTogglePelota(player.id, d)}
+                              title="Pelota"
+                              className={clsx('w-7 h-6 rounded-md text-[10px] font-bold transition-colors',
+                                pPresent ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 text-gray-300 hover:bg-gray-100')}>
+                              P
+                            </button>
+                          </div>
                           {/* PSE con colores */}
-                          {status === 'presente' && (
+                          {fPresent && (
                             <>
                               <select
                                 value={pse ?? ''}
@@ -341,31 +373,6 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
           </table>
         </div>
       )}
-
-      {/* Dropdown de estado */}
-      {menuFor && (() => {
-        const status = fisicoRecords.find(r => r.player_id === menuFor.playerId && r.date === menuFor.date)?.status ?? null
-        return (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
-            <div className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-100 p-1 flex gap-1"
-              style={{ left: menuFor.x, top: menuFor.y, transform: 'translateX(-50%)' }}>
-              {(['presente', 'ausente', 'lesionado'] as AttendanceStatus[]).map(opt => (
-                <button key={opt} onClick={() => { handleSetStatus(menuFor.playerId, menuFor.date, opt); setMenuFor(null) }}
-                  className={clsx('w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center', STATUS_STYLE[opt].cls)} title={opt}>
-                  {STATUS_STYLE[opt].label}
-                </button>
-              ))}
-              {status && (
-                <button onClick={() => { handleSetStatus(menuFor.playerId, menuFor.date, null); setMenuFor(null) }}
-                  className="w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center bg-gray-50 text-gray-400 hover:bg-gray-100" title="Limpiar">
-                  <X size={13}/>
-                </button>
-              )}
-            </div>
-          </>
-        )
-      })()}
 
       {/* Modal agregar día */}
       {showAddDay && (
