@@ -183,7 +183,10 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
   }
   function getPSE(playerId: string, date: string): number | null {
-    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse ?? null
+    // Primero busca en Físico, si no hay busca en Pelota
+    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse
+      ?? pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.pse
+      ?? null
   }
   function getPelotaPresent(playerId: string, date: string): boolean {
     return pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.status === 'presente'
@@ -193,12 +196,10 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     const current = getStatus(playerId, date)
     try {
       if (current === 'presente') {
-        // presente → null (limpiar)
         await clearAttendanceStatus(playerId, date, TURNO)
         await setAttendancePSE(playerId, date, TURNO, null).catch(() => {})
         setFisicoRecords(prev => prev.filter(r => !(r.player_id === playerId && r.date === date)))
       } else {
-        // null/ausente → presente
         await setAttendanceStatus(playerId, date, TURNO, 'presente')
         setFisicoRecords(prev => {
           const existing = prev.find(r => r.player_id === playerId && r.date === date)
@@ -232,6 +233,14 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     try {
       await setAttendancePSE(playerId, date, TURNO, pse)
       setFisicoRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
+      onVersionBump()
+    } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
+  }
+
+  async function handleSetPelotaPSE(playerId: string, date: string, pse: number | null) {
+    try {
+      await setAttendancePSE(playerId, date, 'Pelota', pse)
+      setPelotaRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
       onVersionBump()
     } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
   }
@@ -338,12 +347,17 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                               P
                             </button>
                           </div>
-                          {/* PSE con colores */}
-                          {fPresent && (
+                          {/* PSE con colores — se muestra si fue a Físico O a Pelota */}
+                          {(fPresent || pPresent) && (
                             <>
                               <select
                                 value={pse ?? ''}
-                                onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}
+                                onChange={e => {
+                                  const val = e.target.value ? Number(e.target.value) : null
+                                  // Si fue a Físico, guardar PSE en Físico; si solo Pelota, guardar en Pelota
+                                  if (fPresent) handleSetPSE(player.id, d, val)
+                                  else handleSetPelotaPSE(player.id, d, val)
+                                }}
                                 className={clsx('mt-1 w-11 h-6 text-[10px] rounded-md border border-gray-200 text-center bg-white mx-auto block font-semibold',
                                   pse ? pseColorClass(pse) : 'text-gray-500')}
                                 title="PSE (1-10)">
