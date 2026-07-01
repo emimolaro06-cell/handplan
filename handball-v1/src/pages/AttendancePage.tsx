@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus, FileDown,
+  X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus, FileDown, Settings,
 } from 'lucide-react'
-import { format, addMonths, subMonths, startOfWeek } from 'date-fns'
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { clsx } from '@/lib/utils'
@@ -10,10 +10,12 @@ import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
 import {
   listPlayers, addPlayer, deletePlayer,
-  getAttendanceInRange, setAttendanceStatus, clearAttendanceStatus, clearAttendanceDay, setAttendancePSE,
+  getAttendanceForTurnoInRange, setAttendanceStatus, clearAttendanceStatus, clearAttendanceDay, setAttendancePSE,
   computeAttendanceSummary, getMonthRange,
   getAttendanceHeader, saveAttendanceHeader, downloadAttendanceExcel,
+  getAttendanceInRange,
 } from '@/lib/attendance'
+import { getWeekDays, saveWeekDays, getDatesForWeekDays, WEEK_DAY_LABELS, WEEK_DAY_FULL } from '@/lib/attendanceWeekDays'
 import { ATTENDANCE_FIXED_SHIFTS } from '@/lib/constants'
 import type { Player, AttendanceRecord, AttendanceStatus, TeamCategory } from '@/types'
 
@@ -22,6 +24,9 @@ const STATUS_STYLE: Record<AttendanceStatus, { label: string; cls: string }> = {
   ausente:   { label: 'A', cls: 'bg-red-100 text-red-700' },
   lesionado: { label: 'L', cls: 'bg-amber-100 text-amber-700' },
 }
+
+// Pelota es el único turno fijo en Asistencia (Prep Física tiene su propia página)
+const PELOTA_TURNO = 'Pelota'
 
 export function AttendancePage() {
   const { profile, effectiveUserId, selectedCategory, account } = useAppStore()
@@ -33,8 +38,7 @@ export function AttendancePage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [newPlayerName, setNewPlayerName] = useState('')
 
-  // Encabezado de texto libre y mes — separado por turno
-  const [activeTurno, setActiveTurno] = useState<string>(ATTENDANCE_FIXED_SHIFTS[0])
+  const [activeTurno, setActiveTurno] = useState<string>(PELOTA_TURNO)
   const [extraTurnos, setExtraTurnos] = useState<string[]>([])
   const [refMonth, setRefMonth] = useState(new Date())
 
@@ -43,7 +47,11 @@ export function AttendancePage() {
   const [attendanceVersion, setAttendanceVersion] = useState(0)
   const bumpVersion = () => setAttendanceVersion(v => v + 1)
 
-  const allTurnos = [...ATTENDANCE_FIXED_SHIFTS, ...extraTurnos]
+  // Días fijos de Pelota
+  const [pelotaWeekDays, setPelotaWeekDays] = useState<number[]>([])
+  const [showWeekDayConfig, setShowWeekDayConfig] = useState(false)
+
+  const allTurnos = [PELOTA_TURNO, ...extraTurnos]
 
   useEffect(() => {
     if (!effectiveUserId || !category) return
@@ -52,7 +60,20 @@ export function AttendancePage() {
       .then(setPlayers)
       .catch(() => setToast({ msg: 'Error al cargar jugadores.', type: 'error' }))
       .finally(() => setLoading(false))
+    // Cargar días fijos de Pelota
+    getWeekDays(effectiveUserId, category, PELOTA_TURNO)
+      .then(setPelotaWeekDays)
+      .catch(() => {})
   }, [effectiveUserId, category])
+
+  async function handleToggleWeekDay(day: number) {
+    if (!effectiveUserId || !category) return
+    const newDays = pelotaWeekDays.includes(day)
+      ? pelotaWeekDays.filter(d => d !== day)
+      : [...pelotaWeekDays, day].sort()
+    setPelotaWeekDays(newDays)
+    await saveWeekDays(effectiveUserId, category, PELOTA_TURNO, newDays).catch(() => {})
+  }
 
   async function handleAddPlayer() {
     if (!effectiveUserId || !newPlayerName.trim()) return
@@ -130,9 +151,12 @@ export function AttendancePage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 font-display">Asistencia</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{category}</p>
+          <p className="text-gray-500 text-sm mt-0.5">{category} · Pelota</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="secondary" size="sm" icon={<Settings size={15}/>} onClick={() => setShowWeekDayConfig(true)}>
+            Días fijos
+          </Button>
           <Button variant="secondary" size="sm" icon={<FileDown size={15}/>} loading={exporting} onClick={handleExportExcel}>
             Excel
           </Button>
@@ -188,14 +212,46 @@ export function AttendancePage() {
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
             onPSEChange={bumpVersion}
+            fixedWeekDays={activeTurno === PELOTA_TURNO ? pelotaWeekDays : []}
           />
-
-          {activeTurno === 'Preparación física' && (
-            <PSEChart players={players} refMonth={refMonth} refreshKey={attendanceVersion}/>
-          )}
 
           <CombinedSummary players={players} refMonth={refMonth} allTurnos={allTurnos} refreshKey={attendanceVersion}/>
         </>
+      )}
+
+      {/* Modal: configurar días fijos de Pelota */}
+      {showWeekDayConfig && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowWeekDayConfig(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Días fijos de Pelota</h3>
+              <button onClick={() => setShowWeekDayConfig(false)} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-gray-500">Seleccioná los días de la semana que se entrenan. El calendario los va a generar automáticamente.</p>
+              <div className="flex gap-2 flex-wrap">
+                {WEEK_DAY_LABELS.map((label, day) => (
+                  <button key={day} type="button"
+                    onClick={() => handleToggleWeekDay(day)}
+                    className={clsx('w-10 h-10 rounded-xl text-sm font-bold transition-colors',
+                      pelotaWeekDays.includes(day)
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}
+                    title={WEEK_DAY_FULL[day]}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {pelotaWeekDays.length > 0 && (
+                <p className="text-xs text-gray-400">
+                  Días activos: {pelotaWeekDays.map(d => WEEK_DAY_FULL[d]).join(', ')}
+                </p>
+              )}
+              <Button className="w-full" onClick={() => setShowWeekDayConfig(false)}>Listo</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal: agregar jugador */}
@@ -266,7 +322,7 @@ export function AttendancePage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE UN TURNO — jugadores × días del mes
 // ════════════════════════════════════════════════════════════════════════════
-function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onPSEChange }: {
+function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onPSEChange, fixedWeekDays = [] }: {
   players: Player[]
   turno: string
   category: string
@@ -276,6 +332,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
   onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
   onPSEChange: () => void
+  fixedWeekDays?: number[]
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -311,9 +368,6 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
   const isPhysical = turno === 'Preparación física'
 
-  // Para Pelota / turnos extra: todos los días del mes, como siempre.
-  // Para Preparación física: arranca vacío y se completa con los días que tengan
-  // registros guardados + los que el preparador agregue manualmente con el botón.
   const allMonthDays = useMemo(() => {
     const result: string[] = []
     const cursor = new Date(start + 'T12:00:00')
@@ -325,6 +379,11 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     return result
   }, [start, end])
 
+  const fixedDays = useMemo(
+    () => fixedWeekDays.length > 0 ? getDatesForWeekDays(refMonth, fixedWeekDays) : [],
+    [refMonth, fixedWeekDays.join(',')],
+  )
+
   const [extraDays, setExtraDays] = useState<string[]>([])
   const [showAddDay, setShowAddDay] = useState(false)
   const [newDayValue, setNewDayValue] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -334,9 +393,13 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
     [records],
   )
 
+  // Pelota: días fijos configurados + días con registros + días extra manuales
+  // Otros turnos extra: todos los días del mes
   const days = isPhysical
     ? Array.from(new Set([...daysWithData, ...extraDays])).sort()
-    : allMonthDays
+    : fixedWeekDays.length > 0
+      ? Array.from(new Set([...fixedDays, ...daysWithData, ...extraDays])).sort()
+      : allMonthDays
 
   function handleAddDayClick() {
     setNewDayValue(format(new Date(), 'yyyy-MM-dd'))
@@ -582,7 +645,7 @@ function AttendanceGrid({ players, turno, category, coachId, refMonth, setRefMon
                           >
                             {status ? STATUS_STYLE[status].label : '−'}
                           </button>
-                          {isPhysical && status === 'presente' && (
+                          {(isPhysical || turno === 'Pelota') && status === 'presente' && (
                             <select
                               value={getPSE(player.id, d) ?? ''}
                               onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}
