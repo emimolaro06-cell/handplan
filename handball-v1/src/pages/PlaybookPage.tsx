@@ -388,40 +388,70 @@ export function PlaybookPage() {
   async function exportMP4() {
     if (framesRef.current.length < 2 || exporting) return
     setExporting('mp4')
-    const canvas = cvRef.current!
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
-      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8'
-      : 'video/webm'
-    const stream = canvas.captureStream(30)
-    const recorder = new MediaRecorder(stream, { mimeType })
-    const chunks: Blob[] = []
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = 'jugada.webm'; a.click()
-      URL.revokeObjectURL(url); setExporting(null)
+    try {
+      const canvas = cvRef.current!
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8'
+        : 'video/webm'
+      const stream = canvas.captureStream(30)
+      const recorder = new MediaRecorder(stream, { mimeType })
+      const chunks: Blob[] = []
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+
+      await new Promise<void>((resolve, reject) => {
+        recorder.onstop = () => {
+          try {
+            const blob = new Blob(chunks, { type: 'video/webm' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'jugada.webm'; a.click()
+            URL.revokeObjectURL(url)
+          } catch (err) { reject(err) }
+          resolve()
+        }
+        recorder.onerror = reject
+        recorder.start()
+
+        const totalTrans = framesRef.current.length - 1
+        const msPerTrans = 1000
+        const totalMs = totalTrans * msPerTrans
+        const MAX_MS = Math.max(totalMs + 2000, 15000) // timeout máximo
+        const startTime = performance.now()
+        let timedOut = false
+
+        // Timeout de seguridad
+        const timeout = setTimeout(() => {
+          timedOut = true
+          recorder.stop()
+        }, MAX_MS)
+
+        function tick(now: number) {
+          if (timedOut) return
+          const elapsed = now - startTime
+          const progress = Math.min(elapsed / totalMs, 1)
+          const globalStep = progress * totalTrans
+          const fi = Math.min(Math.floor(globalStep), totalTrans - 1)
+          const t = globalStep - fi
+          const scene = t >= 1 ? framesRef.current[fi + 1] : interpolateScene(framesRef.current[fi], framesRef.current[fi + 1], t)
+          paintScene(scene)
+          if (progress < 1) {
+            requestAnimationFrame(tick)
+          } else {
+            // Mantener último frame 0.8s y parar
+            setTimeout(() => {
+              clearTimeout(timeout)
+              recorder.stop()
+            }, 800)
+          }
+        }
+        requestAnimationFrame(tick)
+      })
+    } catch (err) {
+      console.error('Export error:', err)
+      alert('Error al exportar. Intentá con menos frames.')
+    } finally {
+      setExporting(null)
+      paint(currentFrameRef.current)
     }
-    recorder.start()
-    const totalTrans = framesRef.current.length - 1
-    const msPerTrans = 1200  // 1.2s per transition for export
-    const totalMs = totalTrans * msPerTrans
-    const startTime = performance.now()
-    await new Promise<void>(resolve => {
-      function tick(now: number) {
-        const elapsed = now - startTime
-        const progress = Math.min(elapsed / totalMs, 1)
-        const globalStep = progress * totalTrans
-        const fi = Math.min(Math.floor(globalStep), totalTrans - 1)
-        const t = globalStep - fi
-        const scene = t >= 1 ? framesRef.current[fi + 1] : interpolateScene(framesRef.current[fi], framesRef.current[fi + 1], t)
-        paintScene(scene)
-        if (progress < 1) requestAnimationFrame(tick); else resolve()
-      }
-      requestAnimationFrame(tick)
-    })
-    await new Promise(r => setTimeout(r, 800))  // hold last frame
-    recorder.stop()
   }
 
   // ─── Export GIF ───────────────────────────────────────────────────────────
