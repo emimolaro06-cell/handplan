@@ -402,19 +402,22 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
 function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
   const [selected, setSelected] = useState('__team__')
   const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [weeklyData, setWeeklyData] = useState<{ label: string; fullLabel: string; value: number }[]>([])
+
+  const { start, end } = getMonthRange(refMonth)
   const playerIdsKey = players.map(p => p.id).join(',')
-  const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
-  const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
 
   useEffect(() => {
-    getAttendanceForTurnoInRange(playerIds, TURNO, start, end)
-      .then(setRecords)
+    const ids = players.map(p => p.id)
+    if (ids.length === 0) return
+    getAttendanceForTurnoInRange(ids, TURNO, start, end).then(setRecords)
   }, [playerIdsKey, start, end, refreshKey])
 
-  const relevant = records.filter(r => r.status === 'presente' && r.pse != null &&
-    (selected === '__team__' || r.player_id === selected))
-
-  const weeklyData = useMemo(() => {
+  useEffect(() => {
+    const relevant = records.filter(r =>
+      r.status === 'presente' && r.pse != null &&
+      (selected === '__team__' || r.player_id === selected)
+    )
     const buckets = new Map<string, { sum: number; count: number; weekStart: Date }>()
     relevant.forEach(r => {
       const day = new Date(r.date + 'T12:00:00')
@@ -423,9 +426,15 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
       const b = buckets.get(key) ?? { sum: 0, count: 0, weekStart: ws }
       b.sum += r.pse as number; b.count += 1; buckets.set(key, b)
     })
-    return Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b))
-      .map(([, b], i) => ({ label: `Sem ${i + 1}`, fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }), value: Math.round((b.sum / b.count) * 10) / 10 }))
-  }, [relevant])
+    const data = Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, b], i) => ({
+        label: `Sem ${i + 1}`,
+        fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
+        value: Math.round((b.sum / b.count) * 10) / 10,
+      }))
+    setWeeklyData(data)
+  }, [records, selected])
 
   if (weeklyData.length === 0) return null
 
@@ -506,8 +515,6 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
       }
     })
   }, [allDates, relevantPlayers, fisicoRecords, pelotaRecords])
-
-  if (dailyData.length === 0) return null
 
   // Agrupar por semana para mostrar separadores
   const weeks = useMemo(() => {
