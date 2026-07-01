@@ -32,8 +32,10 @@ export function PhysicalPage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [newPlayerName, setNewPlayerName] = useState('')
   const [refMonth, setRefMonth] = useState(new Date())
-  const [version, setVersion] = useState(0)
-  const bumpVersion = () => setVersion(v => v + 1)
+
+  // Records levantados desde PhysicalGrid para que los charts los usen sin fetchear solos
+  const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
+  const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
 
   useEffect(() => {
     if (!effectiveUserId || !category) return
@@ -96,10 +98,10 @@ export function PhysicalPage() {
             setRefMonth={setRefMonth}
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
-            onVersionBump={bumpVersion}
+            onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
           />
-          <PSEChart players={players} refMonth={refMonth} refreshKey={version} />
-          <SRPEChart players={players} refMonth={refMonth} refreshKey={version} />
+          <PSEChart players={players} fisicoRecords={fisicoRecords} />
+          <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} />
         </>
       )}
 
@@ -134,20 +136,36 @@ export function PhysicalPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE PREPARACIÓN FÍSICA con PSE + sRPE
 // ════════════════════════════════════════════════════════════════════════════
-function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onVersionBump }: {
+function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange }: {
   players: Player[]; category: string; coachId: string | null; refMonth: Date
   setRefMonth: (d: Date) => void; onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
-  onVersionBump: () => void
+  onRecordsChange: (fisico: AttendanceRecord[], pelota: AttendanceRecord[]) => void
 }) {
-  const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
-  const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
+  const [fisicoRecords, setFisicoRecordsRaw] = useState<AttendanceRecord[]>([])
+  const [pelotaRecords, setPelotaRecordsRaw] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [extraDays, setExtraDays] = useState<string[]>([])
   const [showAddDay, setShowAddDay] = useState(false)
   const [newDayValue, setNewDayValue] = useState('')
   const [headerInfo, setHeaderInfo] = useState({ coach: '', assistant: '' })
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Wrappers que notifican al padre cada vez que cambian los records
+  function setFisicoRecords(updater: AttendanceRecord[] | ((prev: AttendanceRecord[]) => AttendanceRecord[])) {
+    setFisicoRecordsRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      onRecordsChange(next, pelotaRecords)
+      return next
+    })
+  }
+  function setPelotaRecords(updater: AttendanceRecord[] | ((prev: AttendanceRecord[]) => AttendanceRecord[])) {
+    setPelotaRecordsRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      onRecordsChange(fisicoRecords, next)
+      return next
+    })
+  }
 
   const playerIdsKey = players.map(p => p.id).join(',')
   const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
@@ -163,18 +181,19 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   useEffect(() => {
     if (playerIds.length === 0) { setLoading(false); return }
     setLoading(true)
+    setExtraDays([])
     Promise.all([
       getAttendanceForTurnoInRange(playerIds, TURNO, start, end),
       getAttendanceForTurnoInRange(playerIds, 'Pelota', start, end),
     ]).then(([fisico, pelota]) => {
-      setFisicoRecords(fisico)
-      setPelotaRecords(pelota)
+      setFisicoRecordsRaw(fisico)
+      setPelotaRecordsRaw(pelota)
+      onRecordsChange(fisico, pelota)
       const daysWithData = Array.from(new Set(fisico.map(r => r.date))).sort()
-      setExtraDays(prev => Array.from(new Set([...prev, ...daysWithData])).sort())
+      setExtraDays(daysWithData)
     })
     .catch(() => onToast({ msg: 'Error al cargar asistencia.', type: 'error' }))
     .finally(() => setLoading(false))
-    setExtraDays([])
   }, [playerIdsKey, start, end])
 
   const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
@@ -183,7 +202,9 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
   }
   function getPSE(playerId: string, date: string): number | null {
-    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse ?? null
+    return fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.pse
+      ?? pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.pse
+      ?? null
   }
   function getPelotaPresent(playerId: string, date: string): boolean {
     return pelotaRecords.find(r => r.player_id === playerId && r.date === date)?.status === 'presente'
@@ -206,7 +227,6 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
           return [...prev, { id: '', player_id: playerId, date, turno: TURNO, status: 'presente', pse: null, created_at: '' }]
         })
       }
-      onVersionBump()
     } catch { onToast({ msg: 'Error al guardar.', type: 'error' }) }
   }
 
@@ -224,7 +244,6 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
           return [...prev, { id: '', player_id: playerId, date, turno: 'Pelota', status: 'presente', pse: null, created_at: '' }]
         })
       }
-      onVersionBump()
     } catch { onToast({ msg: 'Error al guardar.', type: 'error' }) }
   }
 
@@ -232,7 +251,13 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     try {
       await setAttendancePSE(playerId, date, TURNO, pse)
       setFisicoRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
-      onVersionBump()
+    } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
+  }
+
+  async function handleSetPelotaPSE(playerId: string, date: string, pse: number | null) {
+    try {
+      await setAttendancePSE(playerId, date, 'Pelota', pse)
+      setPelotaRecords(prev => prev.map(r => r.player_id === playerId && r.date === date ? { ...r, pse } : r))
     } catch { onToast({ msg: 'Error al guardar PSE.', type: 'error' }) }
   }
 
@@ -338,12 +363,15 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                               P
                             </button>
                           </div>
-                          {/* PSE con colores */}
-                          {fPresent && (
+                          {/* PSE — se muestra si fue a Físico O solo a Pelota */}
+                          {(fPresent || pPresent) && (
                             <>
                               <select
                                 value={pse ?? ''}
-                                onChange={e => handleSetPSE(player.id, d, e.target.value ? Number(e.target.value) : null)}
+                                onChange={e => {
+                                  const val = e.target.value ? Number(e.target.value) : null
+                                  fPresent ? handleSetPSE(player.id, d, val) : handleSetPelotaPSE(player.id, d, val)
+                                }}
                                 className={clsx('mt-1 w-11 h-6 text-[10px] rounded-md border border-gray-200 text-center bg-white mx-auto block font-semibold',
                                   pse ? pseColorClass(pse) : 'text-gray-500')}
                                 title="PSE (1-10)">
@@ -399,20 +427,14 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
 // ════════════════════════════════════════════════════════════════════════════
 // GRÁFICO DE PSE SEMANAL
 // ════════════════════════════════════════════════════════════════════════════
-function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
+// ════════════════════════════════════════════════════════════════════════════
+// GRÁFICO DE PSE SEMANAL — recibe records como prop, sin fetching propio
+// ════════════════════════════════════════════════════════════════════════════
+function PSEChart({ players, fisicoRecords }: { players: Player[]; fisicoRecords: AttendanceRecord[] }) {
   const [selected, setSelected] = useState('__team__')
-  const [records, setRecords] = useState<AttendanceRecord[]>([])
-  const playerIdsKey = players.map(p => p.id).join(',')
-  const { start, end } = getMonthRange(refMonth)
 
-  useEffect(() => {
-    const ids = players.map(p => p.id)
-    if (ids.length === 0) { setRecords([]); return }
-    getAttendanceForTurnoInRange(ids, TURNO, start, end).then(setRecords)
-  }, [playerIdsKey, start, end, refreshKey])
-
-  const weeklyData = (() => {
-    const relevant = records.filter(r =>
+  const weeklyData = useMemo(() => {
+    const relevant = fisicoRecords.filter(r =>
       r.status === 'presente' && r.pse != null &&
       (selected === '__team__' || r.player_id === selected)
     )
@@ -431,7 +453,7 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
         fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
         value: Math.round((b.sum / b.count) * 10) / 10,
       }))
-  })()
+  }, [fisicoRecords, selected])
 
   if (weeklyData.length === 0) return null
 
@@ -469,27 +491,15 @@ function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMon
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GRÁFICO DE sRPE DIARIO — una barra por día, agrupadas por semana
+// GRÁFICO DE sRPE DIARIO — recibe records como prop, sin fetching propio
 // ════════════════════════════════════════════════════════════════════════════
-function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
+function SRPEChart({ players, fisicoRecords, pelotaRecords }: {
+  players: Player[]; fisicoRecords: AttendanceRecord[]; pelotaRecords: AttendanceRecord[]
+}) {
   const [selected, setSelected] = useState('__team__')
-  const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
-  const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
-  const playerIdsKey = players.map(p => p.id).join(',')
-  const { start, end } = getMonthRange(refMonth)
 
-  useEffect(() => {
-    const ids = players.map(p => p.id)
-    if (ids.length === 0) { setFisicoRecords([]); setPelotaRecords([]); return }
-    Promise.all([
-      getAttendanceForTurnoInRange(ids, TURNO, start, end),
-      getAttendanceForTurnoInRange(ids, 'Pelota', start, end),
-    ]).then(([f, p]) => { setFisicoRecords(f); setPelotaRecords(p) })
-  }, [playerIdsKey, start, end, refreshKey])
-
-  const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-
-  const dailyData = (() => {
+  const dailyData = useMemo(() => {
+    const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
     const allDates = Array.from(new Set(fisicoRecords.map(r => r.date))).sort()
     return allDates.map(date => {
       const srpes = relevantPlayers
@@ -504,7 +514,7 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
         color: avg < 400 ? '#639922' : avg < 700 ? '#f59e0b' : avg < 900 ? '#f97316' : '#e34948',
       }
     }).filter(d => d.value > 0)
-  })()
+  }, [fisicoRecords, pelotaRecords, selected, players])
 
   if (dailyData.length === 0) return null
 
@@ -527,10 +537,7 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
             <CartesianGrid stroke="#e1e0d9" vertical={false}/>
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false} interval={0}/>
             <YAxis tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
-            <Tooltip
-              formatter={(v: number) => [v, 'sRPE']}
-              labelFormatter={(l: string) => dailyData.find(d => d.label === l)?.fullLabel ?? l}
-            />
+            <Tooltip formatter={(v: number) => [v, 'sRPE']} labelFormatter={(l: string) => dailyData.find(d => d.label === l)?.fullLabel ?? l}/>
             <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={36}>
               {dailyData.map((d, i) => <Cell key={i} fill={d.color}/>)}
             </Bar>
