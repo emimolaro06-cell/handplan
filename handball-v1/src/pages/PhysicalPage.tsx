@@ -149,7 +149,8 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   const [headerInfo, setHeaderInfo] = useState({ coach: '', assistant: '' })
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const playerIds = useMemo(() => players.map(p => p.id), [players])
+  const playerIdsKey = players.map(p => p.id).join(',')
+  const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
   const todayKey = format(new Date(), 'yyyy-MM-dd')
 
@@ -174,7 +175,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     .catch(() => onToast({ msg: 'Error al cargar asistencia.', type: 'error' }))
     .finally(() => setLoading(false))
     setExtraDays([])
-  }, [players, start, end])
+  }, [playerIdsKey, start, end])
 
   const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
 
@@ -401,13 +402,14 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
 function PSEChart({ players, refMonth, refreshKey }: { players: Player[]; refMonth: Date; refreshKey: number }) {
   const [selected, setSelected] = useState('__team__')
   const [records, setRecords] = useState<AttendanceRecord[]>([])
-  const playerIds = useMemo(() => players.map(p => p.id), [players])
+  const playerIdsKey = players.map(p => p.id).join(',')
+  const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
 
   useEffect(() => {
     getAttendanceForTurnoInRange(playerIds, TURNO, start, end)
       .then(setRecords)
-  }, [players, start, end, refreshKey])
+  }, [playerIdsKey, start, end, refreshKey])
 
   const relevant = records.filter(r => r.status === 'presente' && r.pse != null &&
     (selected === '__team__' || r.player_id === selected))
@@ -467,7 +469,8 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
   const [selected, setSelected] = useState('__team__')
   const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
-  const playerIds = useMemo(() => players.map(p => p.id), [players])
+  const playerIdsKey = players.map(p => p.id).join(',')
+  const playerIds = useMemo(() => players.map(p => p.id), [playerIdsKey])
   const { start, end } = useMemo(() => getMonthRange(refMonth), [refMonth])
 
   useEffect(() => {
@@ -475,7 +478,7 @@ function SRPEChart({ players, refMonth, refreshKey }: { players: Player[]; refMo
       getAttendanceForTurnoInRange(playerIds, TURNO, start, end),
       getAttendanceForTurnoInRange(playerIds, 'Pelota', start, end),
     ]).then(([f, p]) => { setFisicoRecords(f); setPelotaRecords(p) })
-  }, [players, start, end, refreshKey])
+  }, [playerIdsKey, start, end, refreshKey])
 
   const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
   const allDates = useMemo(() => Array.from(new Set(fisicoRecords.map(r => r.date))).sort(), [fisicoRecords])
