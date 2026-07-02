@@ -656,7 +656,7 @@ function PSEChart({ players, fisicoRecords, pelotaRecords, refMonth, weekDays, b
   const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
     return buildChartData(fisicoRecords, pelotaRecords, relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
-  }, [fisicoRecords, players, refMonth, weekDays, baseWeek, selected])
+  }, [fisicoRecords, pelotaRecords, players, refMonth, weekDays, baseWeek, selected])
 
   const hasData = entries.some(e => e.value > 0)
   if (!hasData) return null
