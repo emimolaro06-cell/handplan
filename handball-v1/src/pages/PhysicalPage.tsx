@@ -132,6 +132,7 @@ export function PhysicalPage() {
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
+            weekDays={weekDays}
           />
           <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
           <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
@@ -214,11 +215,12 @@ export function PhysicalPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE PREPARACIÓN FÍSICA con PSE + sRPE
 // ════════════════════════════════════════════════════════════════════════════
-function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange }: {
+function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange, weekDays = [] }: {
   players: Player[]; category: string; coachId: string | null; refMonth: Date
   setRefMonth: (d: Date) => void; onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
   onRecordsChange: (fisico: AttendanceRecord[], pelota: AttendanceRecord[]) => void
+  weekDays?: number[]
 }) {
   const [fisicoRecords, setFisicoRecordsRaw] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecordsRaw] = useState<AttendanceRecord[]>([])
@@ -274,7 +276,10 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     .finally(() => setLoading(false))
   }, [playerIdsKey, start, end])
 
-  const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
+  const days = useMemo(() => {
+    const fixedDays = weekDays.length > 0 ? getDatesForWeekDays(refMonth, weekDays) : []
+    return Array.from(new Set([...fixedDays, ...extraDays])).sort()
+  }, [extraDays, weekDays, refMonth])
 
   function getStatus(playerId: string, date: string): AttendanceStatus | null {
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
@@ -627,7 +632,29 @@ function PSEChart({ players, fisicoRecords, refMonth, weekDays, baseWeek }: {
 
   const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-    return buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
+    const result = buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
+    // Para PSE: solo mostrar días que tienen al menos un valor cargado
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const validLabels = new Set(
+      result.entries
+        .filter(e => e.value > 0)
+        .map(e => e.label)
+    )
+    // Rebuild: mantener solo días con datos, recalcular separadores
+    const filteredEntries = result.entries.filter(e => validLabels.has(e.label))
+    // Recalcular separadorLabels solo entre semanas que tienen entradas
+    const seenWeeks = new Set<string>()
+    const newSeps: string[] = []
+    let lastLabel = ''
+    let lastWeekKey = ''
+    filteredEntries.forEach(e => {
+      if (lastWeekKey && e.weekKey !== lastWeekKey && lastLabel) {
+        newSeps.push(lastLabel)
+      }
+      lastWeekKey = e.weekKey
+      lastLabel = e.label
+    })
+    return { entries: filteredEntries, separatorLabels: newSeps }
   }, [fisicoRecords, players, refMonth, weekDays, baseWeek, selected])
 
   const hasData = entries.some(e => e.value > 0)
