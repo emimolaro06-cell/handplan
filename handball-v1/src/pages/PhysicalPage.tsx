@@ -224,7 +224,7 @@ export function PhysicalPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE PREPARACIÓN FÍSICA con PSE + sRPE
 // ════════════════════════════════════════════════════════════════════════════
-function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange }: {
+function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange, weekDays = [] }: {
   players: Player[]; category: string; coachId: string | null; refMonth: Date
   setRefMonth: (d: Date) => void; onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
