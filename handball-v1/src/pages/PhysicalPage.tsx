@@ -143,7 +143,7 @@ export function PhysicalPage() {
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
             weekDays={weekDays}
           />
-          <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
+          <PSEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
           <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
         </>
       )}
@@ -586,7 +586,11 @@ function buildChartData(
 
       if (mode === 'pse') {
         const pses = players
-          .map(p => records.find(r => r.player_id === p.id && r.date === date)?.pse)
+          .map(p =>
+            records.find(r => r.player_id === p.id && r.date === date)?.pse
+            ?? pelotaRecs.find(r => r.player_id === p.id && r.date === date)?.pse
+            ?? null
+          )
           .filter((v): v is number => v != null)
         value = pses.length > 0
           ? Math.round(pses.reduce((a, b) => a + b, 0) / pses.length * 10) / 10
@@ -643,15 +647,15 @@ function CustomXAxisTick({ x, y, payload, data }: any) {
 // ════════════════════════════════════════════════════════════════════════════
 // GRÁFICO DE PSE POR DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function PSEChart({ players, fisicoRecords, refMonth, weekDays, baseWeek }: {
-  players: Player[]; fisicoRecords: AttendanceRecord[]
+function PSEChart({ players, fisicoRecords, pelotaRecords, refMonth, weekDays, baseWeek }: {
+  players: Player[]; fisicoRecords: AttendanceRecord[]; pelotaRecords: AttendanceRecord[]
   refMonth: Date; weekDays: number[]; baseWeek: number
 }) {
   const [selected, setSelected] = useState('__team__')
 
   const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-    return buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
+    return buildChartData(fisicoRecords, pelotaRecords, relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
   }, [fisicoRecords, players, refMonth, weekDays, baseWeek, selected])
 
   const hasData = entries.some(e => e.value > 0)
