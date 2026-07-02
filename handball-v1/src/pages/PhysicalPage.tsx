@@ -134,7 +134,7 @@ export function PhysicalPage() {
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
             weekDays={weekDays}
           />
-          <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
+          <PSEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
           <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
         </>
       )}
@@ -567,7 +567,12 @@ function buildChartData(
 
       if (mode === 'pse') {
         const pses = players
-          .map(p => records.find(r => r.player_id === p.id && r.date === date)?.pse)
+          .map(p => {
+            // Primero busca en Físico, si no hay busca en Pelota
+            return records.find(r => r.player_id === p.id && r.date === date)?.pse
+              ?? pelotaRecs.find(r => r.player_id === p.id && r.date === date)?.pse
+              ?? null
+          })
           .filter((v): v is number => v != null)
         value = pses.length > 0
           ? Math.round(pses.reduce((a, b) => a + b, 0) / pses.length * 10) / 10
@@ -624,15 +629,15 @@ function CustomXAxisTick({ x, y, payload, data }: any) {
 // ════════════════════════════════════════════════════════════════════════════
 // GRÁFICO DE PSE POR DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function PSEChart({ players, fisicoRecords, refMonth, weekDays, baseWeek }: {
-  players: Player[]; fisicoRecords: AttendanceRecord[]
+function PSEChart({ players, fisicoRecords, pelotaRecords, refMonth, weekDays, baseWeek }: {
+  players: Player[]; fisicoRecords: AttendanceRecord[]; pelotaRecords: AttendanceRecord[]
   refMonth: Date; weekDays: number[]; baseWeek: number
 }) {
   const [selected, setSelected] = useState('__team__')
 
   const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-    const result = buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
+    const result = buildChartData(fisicoRecords, pelotaRecords, relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
     // Para PSE: solo mostrar días que tienen al menos un valor cargado
     const today = format(new Date(), 'yyyy-MM-dd')
     const validLabels = new Set(
