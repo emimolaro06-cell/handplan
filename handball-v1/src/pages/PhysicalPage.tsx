@@ -74,6 +74,15 @@ export function PhysicalPage() {
     localStorage.setItem(`handplan_phys_baseweek_${category}`, String(val))
   }
 
+  if (!category) return (
+    <div className="flex items-center justify-center min-h-[40vh]">
+      <div className="text-center space-y-2">
+        <p className="text-gray-500 font-medium">Seleccioná una categoría desde el menú lateral</p>
+        <p className="text-gray-400 text-sm">para ver la Preparación Física del equipo.</p>
+      </div>
+    </div>
+  )
+
   async function handleAddPlayer() {
     if (!effectiveUserId || !newPlayerName.trim()) return
     try {
@@ -132,9 +141,8 @@ export function PhysicalPage() {
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
-            weekDays={weekDays}
           />
-          <PSEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
+          <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
           <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
         </>
       )}
@@ -215,15 +223,16 @@ export function PhysicalPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // GRILLA DE PREPARACIÓN FÍSICA con PSE + sRPE
 // ════════════════════════════════════════════════════════════════════════════
-function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange, weekDays = [] }: {
+function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDeletePlayer, onToast, onRecordsChange }: {
   players: Player[]; category: string; coachId: string | null; refMonth: Date
   setRefMonth: (d: Date) => void; onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
   onRecordsChange: (fisico: AttendanceRecord[], pelota: AttendanceRecord[]) => void
-  weekDays?: number[]
 }) {
   const [fisicoRecords, setFisicoRecordsRaw] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecordsRaw] = useState<AttendanceRecord[]>([])
+  const fisicoRef = useRef<AttendanceRecord[]>([])
+  const pelotaRef = useRef<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [extraDays, setExtraDays] = useState<string[]>([])
   const [showAddDay, setShowAddDay] = useState(false)
@@ -231,20 +240,29 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   const [headerInfo, setHeaderInfo] = useState({ coach: '', assistant: '' })
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Wrappers que notifican al padre cada vez que cambian los records
+  // Wrappers que sincronizan refs y notifican al padre
   function setFisicoRecords(updater: AttendanceRecord[] | ((prev: AttendanceRecord[]) => AttendanceRecord[])) {
     setFisicoRecordsRaw(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      onRecordsChange(next, pelotaRecords)
+      fisicoRef.current = next
+      onRecordsChange(next, pelotaRef.current)
       return next
     })
   }
   function setPelotaRecords(updater: AttendanceRecord[] | ((prev: AttendanceRecord[]) => AttendanceRecord[])) {
     setPelotaRecordsRaw(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      onRecordsChange(fisicoRecords, next)
+      pelotaRef.current = next
+      onRecordsChange(fisicoRef.current, next)
       return next
     })
+  }
+  function setBothRecords(fisico: AttendanceRecord[], pelota: AttendanceRecord[]) {
+    fisicoRef.current = fisico
+    pelotaRef.current = pelota
+    setFisicoRecordsRaw(fisico)
+    setPelotaRecordsRaw(pelota)
+    onRecordsChange(fisico, pelota)
   }
 
   const playerIdsKey = players.map(p => p.id).join(',')
@@ -266,9 +284,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
       getAttendanceForTurnoInRange(playerIds, TURNO, start, end),
       getAttendanceForTurnoInRange(playerIds, 'Pelota', start, end),
     ]).then(([fisico, pelota]) => {
-      setFisicoRecordsRaw(fisico)
-      setPelotaRecordsRaw(pelota)
-      onRecordsChange(fisico, pelota)
+      setBothRecords(fisico, pelota)
       const daysWithData = Array.from(new Set(fisico.map(r => r.date))).sort()
       setExtraDays(daysWithData)
     })
@@ -276,10 +292,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     .finally(() => setLoading(false))
   }, [playerIdsKey, start, end])
 
-  const days = useMemo(() => {
-    const fixedDays = weekDays.length > 0 ? getDatesForWeekDays(refMonth, weekDays) : []
-    return Array.from(new Set([...fixedDays, ...extraDays])).sort()
-  }, [extraDays, weekDays, refMonth])
+  const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
 
   function getStatus(playerId: string, date: string): AttendanceStatus | null {
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
@@ -408,8 +421,9 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
                       try {
                         await clearAttendanceDay(d, TURNO)
                         await clearAttendanceDay(d, 'Pelota')
-                        setFisicoRecords(prev => prev.filter(r => r.date !== d))
-                        setPelotaRecords(prev => prev.filter(r => r.date !== d))
+                        const newFisico = fisicoRef.current.filter(r => r.date !== d)
+                        const newPelota = pelotaRef.current.filter(r => r.date !== d)
+                        setBothRecords(newFisico, newPelota)
                         setExtraDays(prev => prev.filter(x => x !== d))
                       } catch { onToast({ msg: 'Error al borrar el día.', type: 'error' }) }
                     }} className="text-gray-200 hover:text-red-400 transition-colors mt-0.5">
@@ -567,12 +581,7 @@ function buildChartData(
 
       if (mode === 'pse') {
         const pses = players
-          .map(p => {
-            // Primero busca en Físico, si no hay busca en Pelota
-            return records.find(r => r.player_id === p.id && r.date === date)?.pse
-              ?? pelotaRecs.find(r => r.player_id === p.id && r.date === date)?.pse
-              ?? null
-          })
+          .map(p => records.find(r => r.player_id === p.id && r.date === date)?.pse)
           .filter((v): v is number => v != null)
         value = pses.length > 0
           ? Math.round(pses.reduce((a, b) => a + b, 0) / pses.length * 10) / 10
@@ -629,37 +638,15 @@ function CustomXAxisTick({ x, y, payload, data }: any) {
 // ════════════════════════════════════════════════════════════════════════════
 // GRÁFICO DE PSE POR DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function PSEChart({ players, fisicoRecords, pelotaRecords, refMonth, weekDays, baseWeek }: {
-  players: Player[]; fisicoRecords: AttendanceRecord[]; pelotaRecords: AttendanceRecord[]
+function PSEChart({ players, fisicoRecords, refMonth, weekDays, baseWeek }: {
+  players: Player[]; fisicoRecords: AttendanceRecord[]
   refMonth: Date; weekDays: number[]; baseWeek: number
 }) {
   const [selected, setSelected] = useState('__team__')
 
   const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-    const result = buildChartData(fisicoRecords, pelotaRecords, relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
-    // Para PSE: solo mostrar días que tienen al menos un valor cargado
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const validLabels = new Set(
-      result.entries
-        .filter(e => e.value > 0)
-        .map(e => e.label)
-    )
-    // Rebuild: mantener solo días con datos, recalcular separadores
-    const filteredEntries = result.entries.filter(e => validLabels.has(e.label))
-    // Recalcular separadorLabels solo entre semanas que tienen entradas
-    const seenWeeks = new Set<string>()
-    const newSeps: string[] = []
-    let lastLabel = ''
-    let lastWeekKey = ''
-    filteredEntries.forEach(e => {
-      if (lastWeekKey && e.weekKey !== lastWeekKey && lastLabel) {
-        newSeps.push(lastLabel)
-      }
-      lastWeekKey = e.weekKey
-      lastLabel = e.label
-    })
-    return { entries: filteredEntries, separatorLabels: newSeps }
+    return buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
   }, [fisicoRecords, players, refMonth, weekDays, baseWeek, selected])
 
   const hasData = entries.some(e => e.value > 0)
