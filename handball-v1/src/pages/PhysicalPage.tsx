@@ -141,6 +141,7 @@ export function PhysicalPage() {
             onDeletePlayer={handleDeletePlayer}
             onToast={setToast}
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
+            weekDays={weekDays}
           />
           <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
           <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
@@ -228,6 +229,7 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
   setRefMonth: (d: Date) => void; onDeletePlayer: (id: string) => void
   onToast: (t: { msg: string; type: 'success' | 'error' }) => void
   onRecordsChange: (fisico: AttendanceRecord[], pelota: AttendanceRecord[]) => void
+  weekDays?: number[]
 }) {
   const [fisicoRecords, setFisicoRecordsRaw] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecordsRaw] = useState<AttendanceRecord[]>([])
@@ -292,7 +294,10 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
     .finally(() => setLoading(false))
   }, [playerIdsKey, start, end])
 
-  const days = useMemo(() => Array.from(new Set(extraDays)).sort(), [extraDays])
+  const days = useMemo(() => {
+    const fixedDays = weekDays && weekDays.length > 0 ? getDatesForWeekDays(refMonth, weekDays) : []
+    return Array.from(new Set([...fixedDays, ...extraDays])).sort()
+  }, [extraDays, weekDays, refMonth])
 
   function getStatus(playerId: string, date: string): AttendanceStatus | null {
     return (fisicoRecords.find(r => r.player_id === playerId && r.date === date)?.status ?? null) as AttendanceStatus | null
