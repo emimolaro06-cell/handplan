@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus, FileDown } from 'lucide-react'
+import { X, UserPlus, Trash2, ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react'
 import { format, addMonths, subMonths, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { clsx } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button, Toast, Card, Empty } from '@/components/ui/index'
@@ -11,7 +11,11 @@ import {
   getAttendanceForTurnoInRange, setAttendanceStatus, clearAttendanceStatus, clearAttendanceDay,
   setAttendancePSE, getMonthRange, getAttendanceHeader, saveAttendanceHeader,
 } from '@/lib/attendance'
-import { computeSRPE, pseColorClass, pseChartColor, WEEK_DAY_LABELS } from '@/lib/attendanceWeekDays'
+import {
+  computeSRPE, pseColorClass, pseChartColor,
+  getWeekDays, saveWeekDays, getDatesForWeekDays,
+  WEEK_DAY_LABELS, WEEK_DAY_FULL,
+} from '@/lib/attendanceWeekDays'
 import type { Player, AttendanceRecord, AttendanceStatus, TeamCategory } from '@/types'
 
 const STATUS_STYLE: Record<AttendanceStatus, { label: string; cls: string }> = {
@@ -37,6 +41,11 @@ export function PhysicalPage() {
   const [fisicoRecords, setFisicoRecords] = useState<AttendanceRecord[]>([])
   const [pelotaRecords, setPelotaRecords] = useState<AttendanceRecord[]>([])
 
+  // Configuración de días fijos y semana inicial
+  const [weekDays, setWeekDays] = useState<number[]>([])
+  const [baseWeek, setBaseWeek] = useState<number>(1)
+  const [showWeekConfig, setShowWeekConfig] = useState(false)
+
   useEffect(() => {
     if (!effectiveUserId || !category) return
     setLoading(true)
@@ -44,7 +53,26 @@ export function PhysicalPage() {
       .then(setPlayers)
       .catch(() => setToast({ msg: 'Error al cargar jugadores.', type: 'error' }))
       .finally(() => setLoading(false))
+    // Cargar días fijos de Físico
+    getWeekDays(effectiveUserId, category, TURNO).then(setWeekDays).catch(() => {})
+    // Cargar semana inicial desde localStorage
+    const stored = localStorage.getItem(`handplan_phys_baseweek_${category}`)
+    if (stored) setBaseWeek(Number(stored))
   }, [effectiveUserId, category])
+
+  async function handleToggleWeekDay(day: number) {
+    if (!effectiveUserId || !category) return
+    const newDays = weekDays.includes(day)
+      ? weekDays.filter(d => d !== day)
+      : [...weekDays, day].sort()
+    setWeekDays(newDays)
+    await saveWeekDays(effectiveUserId, category, TURNO, newDays).catch(() => {})
+  }
+
+  function handleBaseWeekChange(val: number) {
+    setBaseWeek(val)
+    localStorage.setItem(`handplan_phys_baseweek_${category}`, String(val))
+  }
 
   async function handleAddPlayer() {
     if (!effectiveUserId || !newPlayerName.trim()) return
@@ -72,9 +100,14 @@ export function PhysicalPage() {
           <h1 className="text-2xl font-bold text-gray-900 font-display">Preparación Física</h1>
           <p className="text-gray-500 text-sm mt-0.5">{category} · PSE y carga de entrenamiento</p>
         </div>
-        <Button variant="secondary" size="sm" icon={<UserPlus size={15}/>} onClick={() => setShowAddPlayer(true)}>
-          Agregar jugador
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="secondary" size="sm" icon={<Settings size={15}/>} onClick={() => setShowWeekConfig(true)}>
+            Días fijos
+          </Button>
+          <Button variant="secondary" size="sm" icon={<UserPlus size={15}/>} onClick={() => setShowAddPlayer(true)}>
+            Agregar jugador
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -100,8 +133,8 @@ export function PhysicalPage() {
             onToast={setToast}
             onRecordsChange={(fisico, pelota) => { setFisicoRecords(fisico); setPelotaRecords(pelota) }}
           />
-          <PSEChart players={players} fisicoRecords={fisicoRecords} />
-          <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} />
+          <PSEChart players={players} fisicoRecords={fisicoRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
+          <SRPEChart players={players} fisicoRecords={fisicoRecords} pelotaRecords={pelotaRecords} refMonth={refMonth} weekDays={weekDays} baseWeek={baseWeek} />
         </>
       )}
 
@@ -129,6 +162,51 @@ export function PhysicalPage() {
       )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)}/>}
+
+      {/* Modal: días fijos y semana inicial */}
+      {showWeekConfig && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Configuración de carga</h3>
+              <button type="button" onClick={() => setShowWeekConfig(false)} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Días de entrenamiento</p>
+                <p className="text-xs text-gray-400 mb-3">Los gráficos mostrarán solo estos días agrupados por semana.</p>
+                <div className="flex gap-2 flex-wrap">
+                  {WEEK_DAY_LABELS.map((label, day) => (
+                    <button key={day} type="button"
+                      onClick={() => handleToggleWeekDay(day)}
+                      title={WEEK_DAY_FULL[day]}
+                      className={clsx('w-10 h-10 rounded-xl text-sm font-bold transition-colors',
+                        weekDays.includes(day) ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {weekDays.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    {weekDays.map(d => WEEK_DAY_FULL[d]).join(', ')}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Semana inicial del mes</p>
+                <p className="text-xs text-gray-400 mb-3">¿Qué número de semana corresponde a la primera semana de este mes? (ej: 54)</p>
+                <input
+                  type="number" min={1} max={99}
+                  value={baseWeek}
+                  onChange={e => handleBaseWeekChange(Number(e.target.value))}
+                  className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-400 text-center font-semibold"
+                />
+              </div>
+              <Button className="w-full" onClick={() => setShowWeekConfig(false)}>Listo</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -434,58 +512,167 @@ function PhysicalGrid({ players, category, coachId, refMonth, setRefMonth, onDel
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
 // GRÁFICO DE PSE SEMANAL — recibe records como prop, sin fetching propio
+
+// ─── Helper: construye datos del gráfico por día agrupados por semana ─────────
+interface ChartEntry {
+  label: string      // "14/07" — clave única para XAxis
+  dayLabel: string   // "Mar" — día corto
+  weekLabel: string  // "Sem 54" — solo en el primer día de la semana
+  weekKey: string    // clave de semana para ReferenceLine
+  value: number
+  color: string
+  isFirstOfWeek: boolean
+}
+
+function buildChartData(
+  records: AttendanceRecord[],
+  pelotaRecs: AttendanceRecord[],
+  players: Player[],
+  refMonth: Date,
+  weekDays: number[],
+  baseWeek: number,
+  mode: 'pse' | 'srpe',
+): { entries: ChartEntry[]; separatorLabels: string[] } {
+  const configuredDays = weekDays.length > 0 ? weekDays : null
+  // Si no hay días configurados, usa todos los días que tienen registros
+  const datesSource = configuredDays
+    ? getDatesForWeekDays(refMonth, configuredDays)
+    : Array.from(new Set(records.map(r => r.date))).sort()
+
+  // Agrupar por semana (lunes como inicio)
+  const weekMap = new Map<string, string[]>()
+  datesSource.forEach(date => {
+    const day = new Date(date + 'T12:00:00')
+    const ws = startOfWeek(day, { weekStartsOn: 1 })
+    const key = format(ws, 'yyyy-MM-dd')
+    weekMap.set(key, [...(weekMap.get(key) ?? []), date])
+  })
+
+  const sortedWeeks = Array.from(weekMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+  const entries: ChartEntry[] = []
+  const separatorLabels: string[] = []
+
+  sortedWeeks.forEach(([weekKey, dates], weekIdx) => {
+    const semNum = baseWeek + weekIdx
+    const weekLabel = `Sem ${semNum}`
+
+    dates.forEach((date, dayIdx) => {
+      const day = new Date(date + 'T12:00:00')
+      let value = 0
+
+      if (mode === 'pse') {
+        const pses = players
+          .map(p => records.find(r => r.player_id === p.id && r.date === date)?.pse)
+          .filter((v): v is number => v != null)
+        value = pses.length > 0
+          ? Math.round(pses.reduce((a, b) => a + b, 0) / pses.length * 10) / 10
+          : 0
+      } else {
+        const srpes = players
+          .map(p => computeSRPE(p.id, date, records, pelotaRecs).srpe)
+          .filter(v => v > 0)
+        value = srpes.length > 0
+          ? Math.round(srpes.reduce((a, b) => a + b, 0) / srpes.length)
+          : 0
+      }
+
+      entries.push({
+        label: format(day, 'd/MM'),
+        dayLabel: format(day, 'EEE', { locale: es }),
+        weekLabel: dayIdx === 0 ? weekLabel : '',
+        weekKey,
+        value,
+        isFirstOfWeek: dayIdx === 0,
+        color: mode === 'pse'
+          ? (value === 0 ? '#e5e7eb' : pseChartColor(value))
+          : (value === 0 ? '#e5e7eb' : value < 400 ? '#639922' : value < 700 ? '#f59e0b' : value < 900 ? '#f97316' : '#e34948'),
+      })
+    })
+
+    // Separador después de esta semana (excepto la última)
+    if (weekIdx < sortedWeeks.length - 1 && dates.length > 0) {
+      separatorLabels.push(format(new Date(dates[dates.length - 1] + 'T12:00:00'), 'd/MM'))
+    }
+  })
+
+  return { entries, separatorLabels }
+}
+
+// Tick personalizado para mostrar semana arriba y día abajo
+function CustomXAxisTick({ x, y, payload, data }: any) {
+  const entry = data?.[payload?.index] as ChartEntry | undefined
+  if (!entry) return null
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {entry.weekLabel && (
+        <text x={0} y={-14} textAnchor="middle" fill="#374151" fontSize={9} fontWeight="700">
+          {entry.weekLabel}
+        </text>
+      )}
+      <text x={0} y={4} textAnchor="middle" fill="#9ca3af" fontSize={9}>
+        {entry.dayLabel}
+      </text>
+    </g>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════════════════
-function PSEChart({ players, fisicoRecords }: { players: Player[]; fisicoRecords: AttendanceRecord[] }) {
+// GRÁFICO DE PSE POR DÍA
+// ════════════════════════════════════════════════════════════════════════════
+function PSEChart({ players, fisicoRecords, refMonth, weekDays, baseWeek }: {
+  players: Player[]; fisicoRecords: AttendanceRecord[]
+  refMonth: Date; weekDays: number[]; baseWeek: number
+}) {
   const [selected, setSelected] = useState('__team__')
 
-  const weeklyData = useMemo(() => {
-    const relevant = fisicoRecords.filter(r =>
-      r.status === 'presente' && r.pse != null &&
-      (selected === '__team__' || r.player_id === selected)
-    )
-    const buckets = new Map<string, { sum: number; count: number; weekStart: Date }>()
-    relevant.forEach(r => {
-      const day = new Date(r.date + 'T12:00:00')
-      const ws = startOfWeek(day, { weekStartsOn: 1 })
-      const key = format(ws, 'yyyy-MM-dd')
-      const b = buckets.get(key) ?? { sum: 0, count: 0, weekStart: ws }
-      b.sum += r.pse as number; b.count += 1; buckets.set(key, b)
-    })
-    return Array.from(buckets.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, b], i) => ({
-        label: `Sem ${i + 1}`,
-        fullLabel: format(b.weekStart, "d 'de' MMM", { locale: es }),
-        value: Math.round((b.sum / b.count) * 10) / 10,
-      }))
-  }, [fisicoRecords, selected])
+  const { entries, separatorLabels } = useMemo(() => {
+    const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
+    return buildChartData(fisicoRecords, [], relevantPlayers, refMonth, weekDays, baseWeek, 'pse')
+  }, [fisicoRecords, players, refMonth, weekDays, baseWeek, selected])
 
-  if (weeklyData.length === 0) return null
+  const hasData = entries.some(e => e.value > 0)
+  if (!hasData) return null
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <p className="text-sm font-semibold text-gray-800">PSE semanal promedio</p>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <p className="text-sm font-semibold text-gray-800">PSE por día</p>
         <select value={selected} onChange={e => setSelected(e.target.value)}
           className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 text-gray-700 focus:outline-none">
-          <option value="__team__">Equipo</option>
+          <option value="__team__">Equipo (promedio)</option>
           {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </select>
       </div>
-      <div style={{ width: '100%', height: 200 }}>
+      <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer>
-          <BarChart data={weeklyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <BarChart data={entries} margin={{ top: 20, right: 8, left: -20, bottom: 8 }}>
             <CartesianGrid stroke="#e1e0d9" vertical={false}/>
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false}/>
-            <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
-            <Tooltip formatter={(v: number) => [v, 'PSE prom.']} labelFormatter={(l: string) => weeklyData.find(d => d.label === l)?.fullLabel ?? l}/>
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
-              {weeklyData.map((d, i) => <Cell key={i} fill={pseChartColor(d.value)}/>)}
+            <XAxis
+              dataKey="label"
+              tick={(props: any) => <CustomXAxisTick {...props} data={entries}/>}
+              axisLine={{ stroke: '#c3c2b7' }}
+              tickLine={false}
+              height={32}
+              interval={0}
+            />
+            <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 10, fill: '#898781' }} axisLine={false} tickLine={false}/>
+            <Tooltip
+              formatter={(v: number) => [v || '—', 'PSE']}
+              labelFormatter={(l: string) => {
+                const e = entries.find(d => d.label === l)
+                return e ? `${e.weekLabel || ''} · ${e.dayLabel} ${l}` : l
+              }}
+            />
+            {separatorLabels.map(lbl => (
+              <ReferenceLine key={lbl} x={lbl} stroke="#d1d5db" strokeDasharray="4 3" strokeWidth={1.5}/>
+            ))}
+            <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={32}>
+              {entries.map((e, i) => <Cell key={i} fill={e.color}/>)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+      <div className="flex gap-4 mt-1 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#639922]"/>1-5 bajo</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]"/>6 medio-bajo</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]"/>7-8 medio-alto</span>
@@ -496,39 +683,28 @@ function PSEChart({ players, fisicoRecords }: { players: Player[]; fisicoRecords
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GRÁFICO DE sRPE DIARIO — recibe records como prop, sin fetching propio
+// GRÁFICO DE sRPE POR DÍA
 // ════════════════════════════════════════════════════════════════════════════
-function SRPEChart({ players, fisicoRecords, pelotaRecords }: {
+function SRPEChart({ players, fisicoRecords, pelotaRecords, refMonth, weekDays, baseWeek }: {
   players: Player[]; fisicoRecords: AttendanceRecord[]; pelotaRecords: AttendanceRecord[]
+  refMonth: Date; weekDays: number[]; baseWeek: number
 }) {
   const [selected, setSelected] = useState('__team__')
 
-  const dailyData = useMemo(() => {
+  const { entries, separatorLabels } = useMemo(() => {
     const relevantPlayers = selected === '__team__' ? players : players.filter(p => p.id === selected)
-    const allDates = Array.from(new Set(fisicoRecords.map(r => r.date))).sort()
-    return allDates.map(date => {
-      const srpes = relevantPlayers
-        .map(p => computeSRPE(p.id, date, fisicoRecords, pelotaRecords).srpe)
-        .filter(v => v > 0)
-      const avg = srpes.length > 0 ? Math.round(srpes.reduce((a, b) => a + b, 0) / srpes.length) : 0
-      const day = new Date(date + 'T12:00:00')
-      return {
-        label: format(day, 'd/MM'),
-        fullLabel: format(day, "EEE d MMM", { locale: es }),
-        value: avg,
-        color: avg < 400 ? '#639922' : avg < 700 ? '#f59e0b' : avg < 900 ? '#f97316' : '#e34948',
-      }
-    }).filter(d => d.value > 0)
-  }, [fisicoRecords, pelotaRecords, selected, players])
+    return buildChartData(fisicoRecords, pelotaRecords, relevantPlayers, refMonth, weekDays, baseWeek, 'srpe')
+  }, [fisicoRecords, pelotaRecords, players, refMonth, weekDays, baseWeek, selected])
 
-  if (dailyData.length === 0) return null
+  const hasData = entries.some(e => e.value > 0)
+  if (!hasData) return null
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
         <div>
           <p className="text-sm font-semibold text-gray-800">Carga diaria (sRPE)</p>
-          <p className="text-xs text-gray-400 mt-0.5">PSE × duración de entrenamiento</p>
+          <p className="text-xs text-gray-400 mt-0.5">PSE × duración · agrupado por semana</p>
         </div>
         <select value={selected} onChange={e => setSelected(e.target.value)}
           className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 text-gray-700 focus:outline-none">
@@ -538,18 +714,34 @@ function SRPEChart({ players, fisicoRecords, pelotaRecords }: {
       </div>
       <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer>
-          <BarChart data={dailyData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+          <BarChart data={entries} margin={{ top: 20, right: 8, left: -10, bottom: 8 }}>
             <CartesianGrid stroke="#e1e0d9" vertical={false}/>
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false} interval={0}/>
-            <YAxis tick={{ fontSize: 11, fill: '#898781' }} axisLine={false} tickLine={false}/>
-            <Tooltip formatter={(v: number) => [v, 'sRPE']} labelFormatter={(l: string) => dailyData.find(d => d.label === l)?.fullLabel ?? l}/>
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={36}>
-              {dailyData.map((d, i) => <Cell key={i} fill={d.color}/>)}
+            <XAxis
+              dataKey="label"
+              tick={(props: any) => <CustomXAxisTick {...props} data={entries}/>}
+              axisLine={{ stroke: '#c3c2b7' }}
+              tickLine={false}
+              height={32}
+              interval={0}
+            />
+            <YAxis tick={{ fontSize: 10, fill: '#898781' }} axisLine={false} tickLine={false}/>
+            <Tooltip
+              formatter={(v: number) => [v || '—', 'sRPE']}
+              labelFormatter={(l: string) => {
+                const e = entries.find(d => d.label === l)
+                return e ? `${e.weekLabel || ''} · ${e.dayLabel} ${l}` : l
+              }}
+            />
+            {separatorLabels.map(lbl => (
+              <ReferenceLine key={lbl} x={lbl} stroke="#d1d5db" strokeDasharray="4 3" strokeWidth={1.5}/>
+            ))}
+            <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={32}>
+              {entries.map((e, i) => <Cell key={i} fill={e.color}/>)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex gap-4 mt-2 text-xs text-gray-500 flex-wrap">
+      <div className="flex gap-4 mt-1 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#639922]"/>&lt;400 baja</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b]"/>400-699 moderada</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]"/>700-899 alta</span>
