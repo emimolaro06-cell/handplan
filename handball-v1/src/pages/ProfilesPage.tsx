@@ -55,7 +55,12 @@ export function ProfilesPage() {
     const { data: fullProfile } = await getProfile(profile.id)
     if (fullProfile) {
       setProfile(fullProfile)
-      navigate('/menu')
+      // Preparadores Físicos necesitan pasar por /categoria para vincular el coach
+      if (fullProfile.role === 'preparador_fisico') {
+        navigate('/categoria')
+      } else {
+        navigate('/menu')
+      }
     }
   }
 

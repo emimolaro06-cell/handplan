@@ -81,8 +81,10 @@ export function MenuPage() {
       .finally(() => setLoading(false))
   }, [effectiveUserId, selectedCategory])
 
-  // Auto-seleccionar primera categoría si no hay ninguna
+  // Auto-seleccionar primera categoría si no hay ninguna (solo para coaches)
   useEffect(() => {
+    if (!profile) return
+    if (profile.role === 'preparador_fisico') return // PF tienen su propio flujo en /categoria
     if (!selectedCategory && categories.length > 0) {
       setSelectedCategory(categories[0] as TeamCategory)
     }
