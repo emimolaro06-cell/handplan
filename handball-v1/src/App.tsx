@@ -41,7 +41,7 @@ function CategoryGuard({ children }: { children: React.ReactNode }) {
   const selectedCategory = useAppStore(s => s.selectedCategory)
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-neutral2-900"><Spinner size={36}/></div>
   if (!profile) return <Navigate to="/" replace/>
-  if (!selectedCategory) return <Navigate to="/categoria" replace/>
+  if (!selectedCategory) return <Navigate to="/menu" replace/>
   return <>{children}</>
 }
 
@@ -62,19 +62,21 @@ export default function App() {
         <Route path="/compartido/:token" element={<SharedSessionPage/>}/>
         <Route path="/microciclo-compartido/:token" element={<SharedMicrocyclePage/>}/>
 
-        {/* Auth */}
+        {/* /categoria solo para preparadores físicos con lógica especial */}
         <Route path="/categoria" element={<AuthGuard><CategoryPage/></AuthGuard>}/>
-        <Route path="/menu"      element={<CategoryGuard><MenuPage/></CategoryGuard>}/>
 
-        {/* App */}
+        {/* /menu sin CategoryGuard — la selección de categoría es inline */}
+        <Route path="/menu" element={<AuthGuard><MenuPage/></AuthGuard>}/>
+
+        {/* App — siguen necesitando categoría seleccionada */}
         <Route path="/crear"             element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/entrenamiento/:id" element={<WithLayout><TrainingEditorPage/></WithLayout>}/>
         <Route path="/biblioteca"        element={<WithLayout><LibraryPage/></WithLayout>}/>
         <Route path="/ejercicios"        element={<WithLayout><ExercisesPage/></WithLayout>}/>
         <Route path="/pizarra"           element={<AuthGuard><AppLayout><PlaybookPage/></AppLayout></AuthGuard>}/>
         <Route path="/planificacion"     element={<WithLayout><MonthlyPlanPage/></WithLayout>}/>
-        <Route path="/asistencia"           element={<WithLayout><AttendancePage/></WithLayout>}/>
-        <Route path="/preparacion-fisica"   element={<AuthGuard><AppLayout><PhysicalPage/></AppLayout></AuthGuard>}/>
+        <Route path="/asistencia"        element={<WithLayout><AttendancePage/></WithLayout>}/>
+        <Route path="/preparacion-fisica" element={<AuthGuard><AppLayout><PhysicalPage/></AppLayout></AuthGuard>}/>
         <Route path="/mi-ayudante"       element={<WithLayout><MyAssistantPage/></WithLayout>}/>
 
         <Route path="*" element={<Navigate to="/" replace/>}/>
