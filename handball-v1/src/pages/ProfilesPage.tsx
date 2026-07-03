@@ -55,7 +55,7 @@ export function ProfilesPage() {
     const { data: fullProfile } = await getProfile(profile.id)
     if (fullProfile) {
       setProfile(fullProfile)
-      navigate('/categoria')
+      navigate('/menu')
     }
   }
 
