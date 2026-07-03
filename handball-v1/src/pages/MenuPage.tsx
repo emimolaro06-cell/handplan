@@ -81,6 +81,13 @@ export function MenuPage() {
       .finally(() => setLoading(false))
   }, [effectiveUserId, selectedCategory])
 
+  // Auto-seleccionar primera categoría si no hay ninguna
+  useEffect(() => {
+    if (!selectedCategory && categories.length > 0) {
+      setSelectedCategory(categories[0] as TeamCategory)
+    }
+  }, [profile?.id])
+
   const CURRENT_VERSION = 'v1.2'
   const [showNews, setShowNews] = useState(false)
   useEffect(() => {
@@ -108,7 +115,7 @@ export function MenuPage() {
       <div className="min-h-screen bg-gray-50">
 
         {/* HERO */}
-        <div className="px-5 pt-7 pb-16 relative overflow-hidden"
+        <div className="px-5 pt-7 pb-8 relative overflow-hidden"
           style={{ backgroundColor: color }}>
           <div className="absolute -right-8 -top-8 w-44 h-44 rounded-full opacity-[0.07]"
             style={{ backgroundColor: 'white' }}/>
@@ -141,7 +148,7 @@ export function MenuPage() {
                   const isSelected = cat === selectedCategory
                   return (
                     <button key={cat} type="button"
-                      onClick={() => setSelectedCategory(isSelected ? null : cat as TeamCategory)}
+                      onClick={() => setSelectedCategory(cat as TeamCategory)}
                       className={clsx(
                         'flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold transition-all',
                         isSelected
@@ -159,7 +166,7 @@ export function MenuPage() {
         </div>
 
         {/* CONTENIDO */}
-        <div className="max-w-xl mx-auto px-4 -mt-6 pb-10 space-y-4">
+        <div className="max-w-xl mx-auto px-4 pt-4 pb-10 space-y-4">
 
           {/* Alerta */}
           {!loading && noSessionsWeek && selectedCategory && (
